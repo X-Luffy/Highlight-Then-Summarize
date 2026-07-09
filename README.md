@@ -1,5 +1,6 @@
 <!-- Exported from Baidu Ku knowledge base. -->
 <!-- Source: https://ku.baidu-int.com/knowledge/HFVrC7hq1Q/pKzJfZczuc/KRMcaCYx6j/w2TZb6MXg1qYOb -->
+<!-- PublishTime: 1783529701000 -->
 
 # 长文领域后训练RL探索调研
 
@@ -170,7 +171,7 @@
 1.  Summary-Helpful 数据
 
     * 特点：没有 summary 可能答，但很容易错；summary 好了会显著降低难度。
-    * 筛选：证据分散
+    * 筛选：证据分散+后验的实验，是否加summary
 
 ```
   teacher 生成：
@@ -202,7 +203,7 @@
 
   R = final_answer_reward——主奖励：答案对不对
 
-    + optional_summary_sufficiency_reward——条件奖励：生成了summary的情况下，能否答对
+    +** optional_summary_sufficiency_reward——条件奖励：生成了summary的情况下，能否答对**
 
     + faithfulness_reward——事实一致性奖励
 
@@ -218,28 +219,6 @@
 
 核心思路是：先用强模型构造 question-conditioned summary，再把数据拆成“学会压缩”，“基于压缩回答”，“端到端压缩后回答”三种格式；
 
-
-
-```
-  /home/disk6/xiazhaoyuan/miniconda3/envs/paper/bin/python code/scripts/build_summary_bottleneck_v0_dataset.py \
-    --master-jsonl output/summary_bottleneck_docqa_200_generated_20260701_205155/master_records.jsonl \
-    --summary-jsonl output/qc_summaries_200_full_doc_gpt54_merged/summaries_gpt-5.4_merged.jsonl \
-    --summary-only-pred-jsonl output/summary_only_sufficiency_gpt54_eval/predictions.jsonl \
-    --output-dir data/summary_bottleneck_v0_gpt54_relaxed \
-    --require-parse-json \
-    --min-located-quotes 1
-
-  高置信 strict 版：
-
-  /home/disk6/xiazhaoyuan/miniconda3/envs/paper/bin/python code/scripts/build_summary_bottleneck_v0_dataset.py \
-    --master-jsonl output/summary_bottleneck_docqa_200_generated_20260701_205155/master_records.jsonl \
-    --summary-jsonl output/qc_summaries_200_full_doc_gpt54_merged/summaries_gpt-5.4_merged.jsonl \
-    --summary-only-pred-jsonl output/summary_only_sufficiency_gpt54_eval/predictions.jsonl \
-    --output-dir data/summary_bottleneck_v0_gpt54_strict \
-    --require-parse-json \
-    --require-summary-only-correct \
-    --min-located-quotes 1
-```
 ```
 三类SFT格式：
  A. Summary-only
@@ -254,35 +233,71 @@
   input: doc + question
   target: summary + answer
 ```
-阶段二：RL训练 stage-1
+**阶段二：RL训练 stage-1**
 
 核心思路：模型自己 rollout，然后 reward 同时看 final answer、summary sufficiency、faithfulness、key detail preservation 和 format。
 
-```
-cd /home/disk6/xiazhaoyuan/workspace/paper/ernie
 
-  /home/disk6/xiazhaoyuan/miniconda3/envs/paper/bin/python code/scripts/build_summary_bottleneck_rl_v0_dataset.py \
-    --master-jsonl output/summary_bottleneck_docqa_200_generated_20260701_205155/master_records.jsonl \
-    --summary-jsonl output/qc_summaries_200_full_doc_gpt54_merged/summaries_gpt-5.4_merged.jsonl \
-    --summary-only-pred-jsonl output/summary_only_sufficiency_gpt54_eval/predictions.jsonl \
-    --output-dir data/summary_bottleneck_rl_v0_gpt54_all \
-    --require-parse-json
 
-  高置信子集命令：
 
-  /home/disk6/xiazhaoyuan/miniconda3/envs/paper/bin/python code/scripts/build_summary_bottleneck_rl_v0_dataset.py \
-    --master-jsonl output/summary_bottleneck_docqa_200_generated_20260701_205155/master_records.jsonl \
-    --summary-jsonl output/qc_summaries_200_full_doc_gpt54_merged/summaries_gpt-5.4_merged.jsonl \
-    --summary-only-pred-jsonl output/summary_only_sufficiency_gpt54_eval/predictions.jsonl \
-    --output-dir data/summary_bottleneck_rl_v0_gpt54_sufficient \
-    --require-parse-json \
-    --require-summary-only-correct
-```
-```
 
-  rl_prompts_structured.jsonl   # 要求模型输出 {"summary": "...", "answer": "..."}
-  rl_prompts_free.jsonl         # 不强制格式，观察模型是否自发使用 summary
-  reward_refs.jsonl             # gold answer / teacher summary / evidence quotes / reward 参考
-  reward_config.json            # v0 reward 设计
 
-```
+
+#### 【20260707】
+**summary生成**
+
+* **准备阶段**
+
+|**目标文件**|**结果文件**|**唯一健**|**脚本**|
+|-|-|-|-|
+|QwenLong-L1 的 DocQA-RL-1.6K 数据集：[https://huggingface.co/datasets/Tongyi-Zhiwen/DocQA-RL-1.6K](https://huggingface.co/datasets/Tongyi-Zhiwen/DocQA-RL-1.6K)<br/>总量：1.59k<br/>划分：train训练集<br/>**测试集：2.01k尚未使用**<br/>|summary文件<br/>`/home/disk6/xiazhaoyuan/workspace/paper/ernie/output/remaining_docqa_aligned_by_key_20260706_220027/master_records_keyaligned.jsonl`<br/>summary-only评估文件：<br/>`/home/disk6/xiazhaoyuan/workspace/paper/ernie/output/summaryonly_full_1533_qwen_math_judge_20260707/full_1533_case_level_details_enriched.jsonl`|**id + source + ability + question**<br/>eg.`docqa_long_toc_choices_0_20000_000000`+`long_toc_choices_0_20000`+`doc-mc`+"`甲公司（住所地为A市B区）与乙公司（住所地为C市D区）签订了一份位于E市F区的厂房租赁合同，约定争议由E市F区法院管辖。后因乙公司拖欠租金，甲公司向E市`| summary生成程序：`/home/disk6/xiazhaoyuan/workspace/paper/ernie/code/scripts/generate_question_conditioned_summaries.py`<br/>System prompt：  你是长文 question-conditioned summary 数据生成专家。你必须输出可解析 JSON，不要输出 Markdown。  User prompt 模板：  请根据 doc 和 question 生成 question-conditioned summary。  重要约束：  1. 你只能使用 doc 中的信息；  2. 输入中没有标准答案，你不能猜测或编造；  3. summary 的目标是保留回答 question 所需的关键证据、实体、数值、时间、条件、例外和推理中间量；  4. 如果 doc 中证据不足，summary 中要明确说明证据不足，而不是硬给答案；  5. summary 不要直接写“答案是...”，除非这是 doc 原文已经显式给出的事实；  6. summary 控制在 150-350 个中文字符或 100-220 个英文词内。  请输出 JSON：  {    "summary": "question-conditioned summary",    "key_facts": ["关键事实1", "关键事实2", "关键事实3"],    "evidence_quotes": ["原文短引用1", "原文短引用2"],    "risk_notes": ["可能的歧义或缺失信息"]  }  [Question]  {question}  [原始长文 doc]  {full_doc}<br/>summary-only评估（含划分）：<br/>`summary/home/disk6/xiazhaoyuan/workspace/paper/ernie/code/scripts/evaluate_summary_only_sufficiency.py`|
+
+* 分析阶段
+
+|长度分布<br/>![](asset/image_19.png)|任务类型<br/>qa固定格式回答"there isXXX"，mc选择题，math数值计算<br/>![](asset/image_20.png)|
+|-|-|
+|![](asset/image_21.png)|**Insight**：<br/>* DocQA的训练集1533个case长度都偏短，超过64k的只有3个case，0-16k占据75%的比例。<br/>* 任务上，均匀分布，评估过程中对于math使用了llm作为judge<br/>* 能力维度会更偏向于定位，summary的专项任务很少，只有3%，如果在docqa有很好表现，那么会有很大优势。<br/>|
+
+* **金标：回答者统一为claude-opus-4-6**
+
+|Summary-Gen-Model|0-20k Easy|20-40k Medium|40k+ Hard|Avg Acc|
+|-|-|-|-|-|
+|claude-opus-4-6|0.762|0.454|0.242|0.690|
+
+    * **insight**：Claude生成的summary质量很高，可以拿来作为后续数据合成的语料。
+
+* SFT/RL数据生成（包含Verifier构建）
+
+|索引|阶段|目标|脚本|文件|统计|
+|-|-|-|-|-|-|
+|1|清洗数据|* 保留summary-only能回答正确的case，代表着它是一个高质量summary，可以拿来训练<br/>* 清洗部分summary中的答案尾端，我们不希望在summary中有答案<br/> 请清洗下面的 question-conditioned summary，只删除尾部明显直接泄露最终答案的总结句。  要求：  1. 保留回答问题所需的证据、实体、数值、时间、条件、例外和推理中间量；  2. 对数学题保留公式、中间计算和必要数值；只删除“答案是/therefore the answer is/因此最终答案为”这类最终答案包装句；  3. 不要新增原 summary 没有的信息；  4. 不要改写大部分 summary，不要压缩，不要润色，只做最小删除；  5. 输出 JSON，不要输出 Markdown。  JSON 格式：  {    "cleaned_summary": "...",    "removed_answer_leakage": true/false,    "removed_text": ["被删除的短句"]  }  [Ability]  {ability}  [Question]  {question}  [Original Summary]  {question_conditioned_summary} <br/>* 检验事实性，利用字段『**evidence_quotes"**』在原doc去检索|`/home/disk6/xiazhaoyuan/workspace/paper/ernie/code/scripts/build_sft_rl_from_enriched_cases.py`<br/>1. 用 id + source + ability + question 对齐唯一键<br/>2. 先过滤 correct == true<br/>3. 再做 evidence_quotes 原文支持检查<br/>4. 只有通过前面过滤的目标 case，才调用 Claude 清洗 summary|**输入文件**：<br/>case：<br/>`/home/disk6/xiazhaoyuan/workspace/paper/ernie/output/summaryonly_full_1533_qwen_math_judge_20260707/full_1533_case_level_details_enriched.jsonl`<br/>summary-only-eval：<br/>`/home/disk6/xiazhaoyuan/workspace/paper/ernie/output/summaryonly_full_1533_qwen_math_judge_20260707/full_1533_case_level_details_enriched.jsonl`<br/>**输出文件**：<br/>`/home/disk6/xiazhaoyuan/workspace/paper/ernie/output/clean_summary_cases_v2_no_evidence_filter_20260707/clean_cases.jsonl`|总量：1058个case<br/>![](asset/image_22.png)|
+|2||||||
+|3||||||
+
+* 实验结果
+
+|Experiment|Easy 0-20k|Medium 20-40k|Hard 40k+|Avg|备注|
+|-|-|-|-|-|-|
+|* claude-opus-4-6 longdoc|0.989|0.899|0.783|0.925|评测代码：code/scripts/evaluate_longdoc_summary_baselines.py<br/>评测脚本：<br/>/home/disk6/xiazhaoyuan/workspace/paper/ernie/code/scripts/run_longdoc_summary_baselines_200.sh<br/>评测结果文件：<br/>/home/disk6/xiazhaoyuan/workspace/paper/ernie/output/longdoc_summary_baselines_200_seed41_20260708_010327|
+|* claude-opus-4-6 claude_summary|1.000|0.966|0.957|**0.980**||
+|claude-opus-4-6 longdoc+claude_summary|1.000|0.966|0.870|0.970|****|
+|* qwen3.5-flash longdoc|0.773|0.753|0.652|0.750||
+|* qwen3.5-flash claude_summary|0.977|0.944|0.870|0.950||
+|qwen3.5-flash longdoc+claude_summary|0.977|0.966|0.957|0.970|****|
+|qwen3.5-flash longdoc+qwen_summary_200|0.784|0.730|0.565|0.735|* 200词：/home/disk6/xiazhaoyuan/workspace/paper/ernie/output/qwen35_flash_qc_summaries_seed41_short/summaries_qwen3.5-flash_llmrepaired.jsonl<br/>* 500词：/home/disk6/xiazhaoyuan/workspace/paper/ernie/output/qwen35_flash_qc_summaries_seed41_500/summaries_qwen3.5-flash_llmrepaired.jsonl<br/>* 1000词：/home/disk6/xiazhaoyuan/workspace/paper/ernie/output/qwen35_flash_qc_summaries_seed41_1000/summaries_qwen3.5-flash_llmrepaired.jsonl|
+|qwen3.5-flash longdoc+qwen_summary_500|0.841|0.798|0.696|0.805||
+|qwen3.5-flash longdoc+qwen_summary_1000|0.852|0.899|0.826|0.870||
+
+    * **summary对强模型也有作用**：Claude 自身也从 0.925 提升到 0.970，说明 summary 不只是弱模型补丁，对强长文模型也能减少 medium/hard的注意力发散。
+    * **弱模型的注意力分散严重，需要总结去噪**：qwen3.5-flash 加 Claude summary 后从 0.750 提升到 0.970，hard 桶从 0.652 到 0.957。
+    * **summary的长度是关键**：弱模型自己生成的短 summary 不稳定，但当 summary 扩展到 500/1000 级别后，longdoc+summary 能显著提升回答质量，尤其在 40k+ hard case 上
+
+* case study
+
+|Method|Ability|Base Acc|Summary Acc|Delta|修正|退化|备注|
+|-|-|-|-|-|-|-|-|
+|qwen_summary_1000|doc-math|0.494|0.765|**+0.272**|**29**|7|* docqa_docmath_0_20000_000028：average Interest expense，summary 误导成文档未提供平均值；<br/>* docqa_docmath_20000_40000_000378：CAGR，summary 认为缺 full-year 数据；<br/>* docqa_docmath_20000_40000_000390：warrant redemption，summary 口径误导；<br/>* docqa_musique_0_20000_001085、001454：多跳 QA 被summary 压缩掉关键跳。|
+|qwen_summary_1000|doc-mc|0.974|1.000|+0.026|2|0||
+|qwen_summary_1000|doc-qa|0.829|0.829|+0.000|4|4||
+
+**insight**：flash summary 真正带来的提升主要来自“把分散数值和计算中间量压缩到可用上下文尾部”，但风险是弱模型 summary 会误判证据不足或抽错计算口径，所以 RL/SFT的重点应该不是简单鼓励更长 summary，而是奖励关键数值覆盖、公式口径正确和不误拒答

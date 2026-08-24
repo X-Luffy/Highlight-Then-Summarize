@@ -1,0 +1,24 @@
+{
+  "schema_version": "v3_incremental_train_test_config_v1",
+  "train_data_root": "data",
+  "canonical_ood_path": "data/source/ood.jsonl",
+  "longbenchv2_raw_paths": [
+    "data/raw/LongBenchV2/longbenchv2_32k.strategy_details.jsonl",
+    "data/raw/LongBenchV2/longbenchv2_64k.strategy_details.jsonl",
+    "data/raw/LongBenchV2/longbenchv2_128k.strategy_details.jsonl"
+  ],
+  "new_rl_ratio": 0.2,
+  "legacy_ood_rl_ratio": 0.2,
+  "stage2_output_root": "outputs/incremental/stage2",
+  "stage4_output_root": "outputs/incremental/stage4",
+  "stage5_output_root": "outputs/incremental/stage5",
+  "stage6_output_root": "outputs/incremental/stage6",
+  "new_stage6_file": "outputs/incremental/stage6/6_canonical_summary.jsonl",
+  "existing_stage6_file": "data/processed/existing_stage6/6_canonical_summary.jsonl",
+  "parser_config": "configs/1_block_parser.v1.json",
+  "policy_config": "configs/1_block_strategy.v2.json",
+  "retrieval_config": "configs/4_hybrid_retrieval.api.v1.json",
+  "evidence_config": "configs/5_query_diff_evidence.v1.json",
+  "summary_config": "configs/6_canonical_summary.v1.json",
+  "tokenizer": "Qwen/Qwen2.5-7B-Instruct-1M"
+}

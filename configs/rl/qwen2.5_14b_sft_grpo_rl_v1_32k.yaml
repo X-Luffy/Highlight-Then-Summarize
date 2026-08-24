@@ -1,0 +1,56 @@
+rlhf_type: grpo
+model: __SET_FROM_SFT_CHECKPOINT_BY_LAUNCHER__
+train_type: full
+template: qwen
+dataset:
+  - data/rl_length_buckets/rl_v1_32k.jsonl
+external_plugins:
+  - rl/longtext_reward_v3_swift.py
+reward_funcs:
+  - longtext_reward_v3
+max_length: 34816
+max_completion_length: 2048
+truncation_strategy: delete
+attn_impl: flash_attn
+padding_free: true
+sequence_parallel_size: 8
+enable_thinking: false
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+generation_batch_size: 64
+local_rollout_forward_batch_size: 4
+num_generations: 8
+num_train_epochs: 1
+learning_rate: 1.0e-6
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+max_grad_norm: 1.0
+bf16: true
+torch_dtype: bfloat16
+gradient_checkpointing: true
+deepspeed: zero3
+temperature: 1.0
+top_p: 1.0
+top_k: 0
+num_iterations: 1
+beta: 0.0
+scale_rewards: group
+log_completions: true
+split_dataset_ratio: 0
+strict: true
+remove_unused_columns: false
+dataset_num_proc: 8
+load_from_cache_file: true
+dataset_shuffle: true
+train_dataloader_shuffle: true
+data_seed: 42
+seed: 42
+dataloader_num_workers: 2
+logging_steps: 1
+save_strategy: epoch
+save_only_model: true
+save_total_limit: 1
+report_to:
+  - tensorboard
+ddp_timeout: 18000000
+ddp_backend: nccl

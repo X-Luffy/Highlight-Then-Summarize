@@ -1,0 +1,47 @@
+model: Qwen/Qwen2.5-14B-Instruct-1M
+train_type: full
+template: qwen
+dataset:
+  - data/sft_v1.jsonl
+
+# 128K input budget plus a 4K target budget.
+max_length: 135168
+max_new_tokens: 4096
+truncation_strategy: delete
+attn_impl: flash_attn
+padding_free: true
+sequence_parallel_size: 8
+loss_scale: default
+
+# 32 GPUs x 1 sample per device = global batch size 32.
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+num_train_epochs: 1
+learning_rate: 1.0e-5
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+weight_decay: 0.1
+bf16: true
+torch_dtype: bfloat16
+gradient_checkpointing: true
+deepspeed: zero3
+
+output_dir: outputs/sft_14b_128k
+logging_dir: outputs/sft_14b_128k/tensorboard
+add_version: false
+logging_steps: 1
+save_strategy: epoch
+save_total_limit: 1
+save_only_model: true
+report_to:
+  - tensorboard
+overwrite_output_dir: false
+
+dataset_num_proc: 8
+load_from_cache_file: true
+dataset_shuffle: true
+data_seed: 42
+seed: 42
+dataloader_num_workers: 2
+ddp_timeout: 18000000
+ddp_backend: nccl

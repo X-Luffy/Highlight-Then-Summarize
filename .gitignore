@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+outputs/
+data/*.jsonl
+data/**/*.jsonl
+!data/sft_example.jsonl
+!data/rl_example.jsonl
+!data/id_example.jsonl
+!data/ood_example.jsonl
+docs/environment_skill.json
+*.log

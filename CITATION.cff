@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+title: "V3 Long-Context Data and Process-Reward Release"
+message: "Please cite the accompanying paper draft and the software release when using this code."
+type: software
+version: 0.1.0
+date-released: 2026-08-22
+authors:
+  - family-names: "V3 Authors"
+    given-names: "Project"
+    affiliation: "Anonymous research project"
+repository-code: "https://github.com/REPLACE_WITH_PROJECT_OWNER/v3-longcontext-release"
+license: MIT
+keywords:
+  - long-context learning
+  - evidence grounding
+  - process reward
+  - reinforcement learning

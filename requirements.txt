@@ -1,0 +1,4 @@
+# Core reward/evaluator code uses only the Python standard library.
+# Install the training launcher and model stack separately in the target
+# environment (for example, the project-pinned Swift/Transformers build).
+# Optional data-pipeline/API dependencies are owned by the external executors.

@@ -231,7 +231,6 @@ Summary + Format），并对 Learning Rate、Batch Size 和各项 Reward 权重�
 2. v3方法的出发点是**探针实验本身有效，然后和summary直接相关，直接证据**
 
 ![image_039](asset/image_039.png)
-
 |**阶段**|**核心目标与边界**|**数据格式**|**具体执行流程**|
 |-|-|-|-|
 |**数据构造**|**目标**：不重新生产长文档，而是把现有 LongDoc QA 转换成能够监督“先总结、再回答”的两阶段数据。|**基础样本**：`Document D + Question Q + GroundTruth A*`。<br/>**必须保留的元信息**：benchmark、task/category、语言、原文 token 长度、Easy/Medium/Hard、答案类型、是否多跳、是否数值计算。<br/>**Direct 基线**：使用冻结 checkpoint 执行 `D + Q -> A_direct`，缓存 `direct_score`、输出长度、失败类型和置信信息。<br/>**Teacher Summary**：对每个样本生成 200/500/1000/1500 等预算档位的问题条件化 Summary。|1.**去重**：对现有样本去重，避免同一基础问题的 copy 变体被当成独立问题重复采样。<br/>2**.难度基线**：运行冻结 Direct baseline，获得每题的基础难度。<br/>3.**Claude采样**：使用 Claude 或高质量 teacher 为每题生成多预算 Summary；Summary prompt 必须看到 Question，要求保留回答所需事实、实体关系、数值、单位、时间和约束。<br/>4. 清空原文上下文，让冻结 Answerer 仅根据 `Q + Summary` 回答。<br/>5. **摘要分析**：对每档 Summary 计算答案正确率、实际长度和是否直接泄漏答案。<br/>6. **构造 hard negatives**【待定】：删除关键事实、加入冲突事实、交换同文档其他问题的 Summary、保留相关但无用内容、直接抄最终答案但缺推理材料。|
@@ -324,9 +323,7 @@ insight：
 **训练可视化**
 
 ![image_042](asset/image_042.png)
-
 ![image_043](asset/image_043.png)
-
 
 
 ### 训练
@@ -681,6 +678,7 @@ insight：
 
 
 
+###
 
 
 
@@ -853,9 +851,7 @@ RL在哪个环节加UUID？因为RL在模型已经会的情况下加强。<reaso
 **按任务维度（Task Dimension）**
 
 ![image_120](asset/image_120.png)
-
 ![image_121](asset/image_121.png)
-
 SFT不同数据类型，v1取消了，我觉得重点在RL上，SFT创新点很少，正常SFT，**UUID2summary服务于RL**
 
 |****<br/>**Model**|**In-Domain**|****|**AVG**|**OOD**|****|****|****|** AVG**|
@@ -902,6 +898,7 @@ SFT不同数据类型，v1取消了，我觉得重点在RL上，SFT创新点很�
 |14B RL-3|0.5284|0.4608|0.1364|0.3752|0.3090|0.5723|0.4241|0.4352|
 |14B RL-pro|0.4489|0.4804|0.0000|**0.3098**|0.3638|0.5234|0.3833|**0.4235**|
 
+#
 ## **Timeline**
 ~~AAAI~~
 

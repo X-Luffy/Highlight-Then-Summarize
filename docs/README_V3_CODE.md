@@ -10,11 +10,15 @@
 - `rl/rewards.py`：针对 `<evidence>`、`<summary>` 和 `<answer>` 输出的确定性过程奖励。
 - `rl/longtext_reward_v3_swift.py`：Swift/GRPO 适配器，为每条生成结果返回奖励并记录各分项得分。
 - `eval/`：奖励和评测脚本使用的离线、基准原生评测器。
-- `data/`：SFT、RL、ID 和 OOD 各提供一个完整 JSONL case，用于查看数据格式和接入方式。
-- `configs/`：7B 和 14B 的 SFT/RL YAML 配置示例。路径有意使用相对路径或启动器占位符。
+- `data/`：SFT、RL、ID 和 OOD 的快速 case，以及按 benchmark 精选的完整 case。
+- `configs/`：7B 和 14B 的 SFT/RL YAML 配置示例。
+- `eval/configs/`：历史评估 YAML 模板；路径和集群地址使用公开占位符。
+- `eval/examples/`：七个 benchmark 的 all-model 汇总和少量 per-case 评分。
 - `docs/`：复现说明、发布清单和凭据文件示例。
 
-仓库**不包含**模型权重、私有凭据，也不包含约 7.6K 条训练和测试 JSONL 全量数据。`data/` 下的四个完整单 case 只用于说明数据格式。完整数据请从项目批准的存储位置获取，并放到启动器配置的路径下。
+仓库**不包含**模型权重、私有凭据，也不包含约 7.6K 条训练和测试 JSONL 全量数据。
+`data/` 下的 case 只用于说明数据格式；`eval/examples/` 下的结果文件是小型快照，
+不包含完整预测目录。完整数据和实验产物请从项目批准的存储位置获取。
 
 ## 奖励接口
 
@@ -60,11 +64,16 @@ cd v3/github
 MODE=smoke ./data_pipeline/run_all.sh
 ```
 
-默认配置是不会指向具体机器路径的模板。请复制后，将 `data/...` 和 `configs/...` 替换为本地路径，并为 API 阶段设置 `ENVIRONMENT_FILE`。不要提交包含凭据的环境文件。
+默认配置是不会指向具体机器路径的模板。请复制后，将 `data/...`、`configs/...`
+和 `eval/configs/...` 替换为本地路径，并为 API 阶段设置 `ENVIRONMENT_FILE`。
+不要提交包含凭据的环境文件。
 
 ## 数据集快照
 
-论文实验使用的 V3 数据包包含 4,228 条严格 native-GT SFT 数据、2,419 条 active-pool RL 数据，以及 500 条 ID 和 500 条 OOD 评测数据，总量约 7.6K 条。来源数据覆盖 21 个长文本基准。发布的脚本保留了原始的可回答性和来源 QC 决策，详见 [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md)。
+论文实验使用的 V3 数据包包含 4,228 条严格 native-GT SFT 数据、2,419 条 active-pool RL 数据，
+以及 500 条 ID 和 500 条 OOD 评测数据，总量约 7.6K 条。来源数据覆盖 21 个长文本基准。
+发布的脚本保留了原始的可回答性和来源 QC 决策；七任务结果快照位于
+`eval/examples/`，详见 [`docs/REPRODUCIBILITY.md`](REPRODUCIBILITY.md)。
 
 ## 引用
 

@@ -1,0 +1,29 @@
+# ID/OOD evaluation of the native Qwen2.5-14B-Instruct-1M checkpoint.
+model: model/Qwen2.5-14B-Instruct-1M
+training_output: model/Qwen2.5-14B-Instruct-1M
+data_root: train/data
+output_root: train/eval/output/qwen2.5_14b_base_id_ood_noblock_20260818_1745
+id_file: id.jsonl
+ood_file: ood.jsonl
+
+render_blockid: false
+append_training_output_protocol: false
+max_length: 135168
+truncation_strategy: left
+max_new_tokens: 4096
+temperature: 0.0
+top_p: 1.0
+repetition_penalty: 1.0
+infer_backend: pt
+max_batch_size: 1
+write_batch_size: 128
+torch_dtype: bfloat16
+attn_impl: flash_attn
+template: qwen
+
+nnodes: 4
+nproc_per_node: 8
+master_addr: ${MASTER_ADDR}
+master_port: 29541
+dataset_num_proc: 1
+ddp_timeout: 18000000

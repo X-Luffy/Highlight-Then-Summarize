@@ -1,0 +1,22 @@
+{
+  "schema_version": "v3_rl_training_manifest_v1",
+  "updated_at": "2026-08-17",
+  "recommended_phase1": {
+    "file": "rl_swift_train_128k.jsonl",
+    "records": 2242,
+    "benchmarks": 21,
+    "max_input_tokens": 126976,
+    "sha256": "ec246defd108d6822eb5f2874b05d3b866efb03e439750f4415a5508401e0353"
+  },
+  "full_length_later_phase": {
+    "file": "rl_swift_train.jsonl",
+    "records": 2416,
+    "benchmarks": 21,
+    "sha256": "2ad1468d6d77dfa1811a77756abea5d9045ee2724dcac62329d906c0fed3f668"
+  },
+  "quarantine": {
+    "file": "rl_reward_quarantine.json",
+    "records": 3,
+    "sha256": "e004e44c7b2093baef0483a1cdb4bc56c395ef54d2383c1b9d6ea6a8b0dd64f8"
+  }
+}

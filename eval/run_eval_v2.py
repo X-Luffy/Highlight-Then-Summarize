@@ -78,10 +78,37 @@ def prediction_value(record: Mapping[str, Any], preferred: str) -> Any:
     return ""
 
 
+def index_jsonl(path: Path, kind: str) -> Dict[str, Dict[str, Any]]:
+    """Load JSONL records without allowing order-dependent ID overwrites."""
+    indexed: Dict[str, Dict[str, Any]] = {}
+    duplicates = []
+    for row in read_jsonl(path):
+        case_id = record_id(row)
+        if case_id in indexed:
+            duplicates.append(case_id)
+            continue
+        indexed[case_id] = row
+    if duplicates:
+        duplicate_ids = ", ".join(sorted(set(duplicates))[:10])
+        suffix = "..." if len(set(duplicates)) > 10 else ""
+        raise ValueError(
+            f"{path}: duplicate {kind} ID(s): {duplicate_ids}{suffix}"
+        )
+    return indexed
+
+
 def main() -> None:
     args = parse_args()
-    references = {record_id(row): row for row in read_jsonl(args.data)}
-    predictions = {record_id(row): row for row in read_jsonl(args.predictions)}
+    references = index_jsonl(args.data, "reference")
+    predictions = index_jsonl(args.predictions, "prediction")
+    unknown_prediction_ids = sorted(set(predictions) - set(references))
+    if unknown_prediction_ids:
+        preview = ", ".join(unknown_prediction_ids[:10])
+        suffix = "..." if len(unknown_prediction_ids) > 10 else ""
+        raise ValueError(
+            f"{args.predictions}: prediction ID(s) absent from GT: "
+            f"{preview}{suffix}"
+        )
     # The rerank benchmark belongs to the other split in this dataset. Keep
     # this rule in the runner so a report cannot silently include a
     # non-applicable task just because the caller forgot a manual exclusion.

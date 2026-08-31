@@ -5,9 +5,13 @@
 - deterministic reward and evaluator source;
 - evaluator-V2 runner and benchmark evaluator;
 - unit tests;
-- one complete schema example for each SFT, RL, ID, and OOD entry point;
+- one quick schema example for each SFT, RL, ID, and OOD entry point;
+- three complete, benchmark-diverse examples for each SFT, RL, ID-extended,
+  and OOD-extended entry point;
 - incremental data-pipeline orchestration and materialization utilities;
-- representative 7B/14B SFT and RL YAML configurations;
+- 7B/14B SFT and RL YAML configurations plus evaluation configurations;
+- a compact seven-task all-model evaluation snapshot and seven per-case score
+  examples;
 - documentation and paper-facing provenance notes.
 
 ## Excluded
@@ -15,6 +19,8 @@
 - model weights and checkpoints;
 - optimizer states;
 - training/evaluation JSONL data;
+- full evaluator prediction directories and raw API responses;
+- TensorBoard event files, runtime logs, locks, and process IDs;
 - API credentials or private environment files;
 - private Stage-2/4/5/6 API executors;
 - machine-specific absolute paths.

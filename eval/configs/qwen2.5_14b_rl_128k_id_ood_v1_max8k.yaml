@@ -1,0 +1,30 @@
+# ID/OOD evaluation for the final Qwen2.5-14B 128K RL model.
+model: ${PROJECT_ROOT}/run/train/rl/output/qwen2.5_14b_sft_grpo_length_buckets_rl_v1_20260819_v3/128k.random_20260820_1645
+training_output: ${PROJECT_ROOT}/run/train/rl/output/qwen2.5_14b_sft_grpo_length_buckets_rl_v1_20260819_v3/128k.random_20260820_1645
+data_root: ${PROJECT_ROOT}/train/data
+output_root: ${PROJECT_ROOT}/tmp/zhanka_v3_14b_run/run/train/eval/output/qwen2.5_14b_rl_128k_id_ood_v1_max8k
+id_file: id_v1.jsonl
+ood_file: ood_v1.jsonl
+
+render_blockid: false
+append_training_output_protocol: true
+# Preserve up to 131K prompt tokens while allowing an 8K completion.
+max_length: 139264
+truncation_strategy: left
+max_new_tokens: 8192
+temperature: 0.0
+top_p: 1.0
+repetition_penalty: 1.0
+infer_backend: pt
+max_batch_size: 1
+write_batch_size: 128
+torch_dtype: bfloat16
+attn_impl: flash_attn
+template: qwen
+
+nnodes: 4
+nproc_per_node: 8
+master_addr: ${MASTER_ADDR}
+master_port: 29621
+dataset_num_proc: 1
+ddp_timeout: 18000000

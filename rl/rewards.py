@@ -11,7 +11,7 @@ from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 try:
-    from ..eval.evaluators import evaluate_record, rouge_l
+    from .evaluator_v2 import evaluate_record, rouge_l
     from ..block_input import parse_blocks
 except ImportError:
     import sys
@@ -20,7 +20,7 @@ except ImportError:
     TRAIN_ROOT = Path(__file__).resolve().parents[1]
     if str(TRAIN_ROOT) not in sys.path:
         sys.path.insert(0, str(TRAIN_ROOT))
-    from eval.evaluators import evaluate_record, rouge_l
+    from rl.evaluator_v2 import evaluate_record, rouge_l
     from block_input import parse_blocks
 
 
@@ -28,9 +28,13 @@ Interval = Tuple[int, int]
 LOCATOR_SEPARATOR_RE = re.compile(r"\s+(?:…|\.\.\.)\s+")
 
 
-def final_answer_reward(record: Mapping[str, Any], response: Any) -> float:
-    """FinalAnswer score shared with offline evaluation."""
-    return evaluate_record(record, response).score
+def final_answer_reward(
+    record: Mapping[str, Any],
+    response: Any,
+    protocol: str = "native",
+) -> float:
+    """FinalAnswer score shared with Evaluator V2."""
+    return evaluate_record(record, response, protocol=protocol).score
 
 
 def parse_response(response: Any) -> Dict[str, Any]:
@@ -109,20 +113,19 @@ def _parse_evidence_tags(text: str) -> List[Dict[str, Any]]:
         return normalized
 
     result: List[Dict[str, str]] = []
-    # Current tagged contract: one evidence item per line (the span may
-    # continue over multiple lines until the next evidence id).
     tagged_pattern = re.compile(
         r"\[(?P<id>E\d+)\]\s*"
-        r"block(?:_id)?\s*=\s*(?P<block>[^:\n]+?)\s*:\s*"
-        r"(?P<span>.*?)(?=\n\s*\[E\d+\]\s*block(?:_id)?\s*=|\Z)",
+        r"block_id\s*=\s*(?P<block>[^:\s;]+)\s*:\s*"
+        r"(?P<quote>.*?)"
+        r"(?=\s*\[E\d+\]\s*block_id\s*=|\s*$)",
         flags=re.IGNORECASE | re.DOTALL,
     )
     for match in tagged_pattern.finditer(content):
         result.append(
             {
-                "id": match.group("id"),
+                "id": match.group("id").upper(),
                 "block_id": match.group("block").strip(),
-                "span": match.group("span").strip(),
+                "quote": match.group("quote").strip(),
             }
         )
     if result:
@@ -194,16 +197,13 @@ def format_score(parsed: Mapping[str, Any]) -> Tuple[float, List[str]]:
             errors.append(f"unknown_summary_citation:{citation}")
     if not errors:
         return 1.0, errors
-    citation_only = {
-        "missing_summary_citation",
-        "duplicate_evidence_id",
+    critical_errors = {
+        "evidence_not_list",
+        "missing_evidence",
+        "missing_summary",
+        "missing_answer",
     }
-    if all(
-        error in citation_only or error.startswith("unknown_summary_citation:")
-        for error in errors
-    ):
-        return 0.5, errors
-    return 0.0, errors
+    return (0.0 if critical_errors.intersection(errors) else 0.5), errors
 
 
 def _block_texts(record: Mapping[str, Any]) -> Dict[str, str]:
@@ -236,39 +236,6 @@ def _nfkc(value: str) -> str:
     return unicodedata.normalize("NFKC", value)
 
 
-def _strip_wrapping_quotes(value: str) -> str:
-    text = str(value or "").strip()
-    pairs = (("\u201c", "\u201d"), ("\"", "\""), ("'", "'"))
-    for left, right in pairs:
-        if text.startswith(left) and text.endswith(right) and len(text) >= 2:
-            return text[1:-1].strip()
-    return text
-
-
-def _whitespace_normalized(value: str) -> Tuple[str, List[int], List[int]]:
-    """Collapse whitespace while retaining original character boundaries."""
-    normalized: List[str] = []
-    starts: List[int] = []
-    ends: List[int] = []
-    pending_space = False
-    pending_start = 0
-    for index, character in enumerate(_nfkc(value)):
-        if character.isspace():
-            if normalized and not pending_space:
-                pending_space = True
-                pending_start = index
-            continue
-        if pending_space:
-            normalized.append(" ")
-            starts.append(pending_start)
-            ends.append(index)
-            pending_space = False
-        normalized.append(character)
-        starts.append(index)
-        ends.append(index + 1)
-    return "".join(normalized), starts, ends
-
-
 def resolve_quote(
     source: str,
     quote: str,
@@ -276,25 +243,41 @@ def resolve_quote(
 ) -> Optional[Interval]:
     if not source or not quote:
         return None
-    quote = _strip_wrapping_quotes(quote)
-    exact_matches = [
-        match.start() for match in re.finditer(re.escape(quote), source)
-    ]
-    if exact_matches:
-        start = exact_matches[0]
-        return start, start + len(quote)
+    text = quote.strip()
+    candidates = [text]
+    for left, right in (("\"", "\""), ("'", "'"), ("“", "”"), ("‘", "’")):
+        if len(text) >= 2 and text.startswith(left) and text.endswith(right):
+            candidates.append(text[len(left) : -len(right)].strip())
 
-    normalized_source, source_starts, source_ends = _whitespace_normalized(source)
-    normalized_quote, _, _ = _whitespace_normalized(quote)
-    normalized_matches = [
-        match.start()
-        for match in re.finditer(re.escape(normalized_quote), normalized_source)
-    ]
-    if normalized_matches:
-        start = normalized_matches[0]
-        end = start + len(normalized_quote) - 1
-        return source_starts[start], source_ends[end]
+    for candidate in dict.fromkeys(candidates):
+        exact_matches = [
+            match.start() for match in re.finditer(re.escape(candidate), source)
+        ]
+        if exact_matches:
+            start = exact_matches[0]
+            return start, start + len(candidate)
 
+        parts = [re.escape(part) for part in re.split(r"\s+", candidate) if part]
+        if len(parts) > 1:
+            whitespace_match = re.search(r"\s+".join(parts), source)
+            if whitespace_match:
+                return whitespace_match.start(), whitespace_match.end()
+
+    normalized_source = _nfkc(source)
+    normalized_candidates = list(dict.fromkeys(_nfkc(candidate) for candidate in candidates))
+    for normalized_quote in normalized_candidates:
+        normalized_matches = [
+            match.start()
+            for match in re.finditer(
+                re.escape(normalized_quote),
+                normalized_source,
+            )
+        ]
+        if normalized_matches:
+            start = normalized_matches[0]
+            return start, start + len(normalized_quote)
+
+    normalized_quote = normalized_candidates[-1]
     match = difflib.SequenceMatcher(
         None,
         normalized_source,
@@ -308,45 +291,47 @@ def resolve_quote(
     )
     similarity = match.size / max(1, len(normalized_quote))
     if similarity >= fuzzy_threshold:
-        start = match.a
-        end = match.a + match.size - 1
-        return source_starts[start], source_ends[end]
+        return match.a, match.a + match.size
     return None
 
 
-def _repair_reference_spans(
-    references: Sequence[Mapping[str, Any]],
-    block_texts: Mapping[str, str],
+def _reference_spans(
+    record: Mapping[str, Any],
+    block_texts: Optional[Mapping[str, str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Repair stale offsets when a unique stored exact span is available."""
-    repaired: List[Dict[str, Any]] = []
-    for reference in references:
-        item = dict(reference)
-        exact_span = str(item.get("exact_span") or "")
-        block_id = str(item.get("block_id") or "")
-        source = block_texts.get(block_id, "")
-        if exact_span and source and source.count(exact_span) == 1:
-            start = source.index(exact_span)
-            item["start_offset"] = start
-            item["end_offset"] = start + len(exact_span)
-        repaired.append(item)
-    return repaired
-
-
-def _reference_spans(record: Mapping[str, Any]) -> List[Dict[str, Any]]:
     direct = record.get("reference_spans")
     if isinstance(direct, list):
-        return [dict(item) for item in direct if isinstance(item, Mapping)]
+        result = [dict(item) for item in direct if isinstance(item, Mapping)]
+    else:
+        result = []
+        canonical = record.get("canonical")
+        if isinstance(canonical, Mapping):
+            for claim in canonical.get("claims") or []:
+                if not isinstance(claim, Mapping):
+                    continue
+                for support in claim.get("supports") or []:
+                    if isinstance(support, Mapping):
+                        result.append(dict(support))
 
-    result: List[Dict[str, Any]] = []
-    canonical = record.get("canonical")
-    if isinstance(canonical, Mapping):
-        for claim in canonical.get("claims") or []:
-            if not isinstance(claim, Mapping):
+    if block_texts:
+        for span in result:
+            block_id = str(span.get("block_id") or "")
+            source = block_texts.get(block_id)
+            exact = span.get("exact_span")
+            if source is None or exact in (None, ""):
                 continue
-            for support in claim.get("supports") or []:
-                if isinstance(support, Mapping):
-                    result.append(dict(support))
+            exact_text = str(exact)
+            try:
+                start = int(span.get("start_offset"))
+                end = int(span.get("end_offset"))
+            except (TypeError, ValueError):
+                start = end = -1
+            if 0 <= start < end <= len(source) and source[start:end] == exact_text:
+                continue
+            repaired_start = source.find(exact_text)
+            if repaired_start >= 0 and source.find(exact_text, repaired_start + 1) < 0:
+                span["start_offset"] = repaired_start
+                span["end_offset"] = repaired_start + len(exact_text)
     return result
 
 
@@ -613,6 +598,27 @@ def _strip_summary_citations(value: Any) -> str:
     return " ".join(text.split())
 
 
+def summary_task_score(
+    record: Mapping[str, Any],
+    summary: str,
+) -> Tuple[float, str]:
+    references = _summary_references(record)
+    if references:
+        prediction = _strip_summary_citations(summary)
+        score = max(
+            (
+                rouge_l(prediction, _strip_summary_citations(reference))
+                for reference in references
+            ),
+            default=0.0,
+        )
+        return score, "reference_summary_rouge_l"
+    return (
+        evaluate_record(record, summary, protocol="native").score,
+        "evaluator_v2_native_final_answer_metric_fallback",
+    )
+
+
 def summary_citation_ids(summary: Any) -> set[str]:
     return set(re.findall(r"\[(E\d+)\]", str(summary or ""), flags=re.I))
 
@@ -651,23 +657,6 @@ def subquery_coverage(
     summary: Any,
     claim_overlap_threshold: float = 0.5,
 ) -> Dict[str, Any]:
-    reference_summaries = _summary_references(record)
-    if reference_summaries:
-        prediction = _strip_summary_citations(summary)
-        score = max(
-            (
-                rouge_l(prediction, _strip_summary_citations(reference))
-                for reference in reference_summaries
-            ),
-            default=0.0,
-        )
-        return {
-            "score": score,
-            "covered_claim_ids": [],
-            "claim_scores": {},
-            "groups": [],
-            "source": "reference_summary_rouge_l",
-        }
     cited_ids = summary_citation_ids(summary)
     has_legacy_ids = any(
         str(item.get("id") or "")
@@ -766,10 +755,7 @@ def subquery_coverage(
         "score": (
             sum(group_scores) / len(group_scores)
             if group_scores
-            # Citation-link errors are already reflected by R_format and the
-            # separate citation_coverage diagnostic. Do not collapse the
-            # entire path score when no reference claim metadata is attached.
-            else float(bool(resolved_evidence and str(summary or "").strip()))
+            else citation_coverage(resolved_evidence, summary)
         ),
         "covered_claim_ids": sorted(covered_claims),
         "claim_scores": claim_scores,
@@ -858,10 +844,7 @@ def compute_programmatic_reward(
 
     evidence_count = len(parsed["evidence"])
     r_valid = len(resolved) / evidence_count if evidence_count else 0.0
-    reference_spans = _repair_reference_spans(
-        _reference_spans(record),
-        block_texts,
-    )
+    reference_spans = _reference_spans(record, block_texts)
     cited_ids = summary_citation_ids(parsed["summary"])
     has_legacy_ids = any(str(item.get("id") or "") for item in resolved)
     cited_resolved = (
@@ -897,13 +880,27 @@ def compute_programmatic_reward(
         resolved,
         parsed["summary"],
     )
-    r_summary_task = float(coverage_details["score"])
-    summary_score_source = str(coverage_details["source"])
+    r_summary_task, summary_score_source = summary_task_score(
+        record,
+        parsed["summary"],
+    )
     r_citation_coverage = citation_coverage(
         parsed["evidence"],
         parsed["summary"],
     )
-    r_answer = evaluate_record(record, parsed["answer"]).score
+    # Actual GRPO completions are tagged text.  Score the complete response so
+    # missing, unclosed, or duplicate <answer> tags are rejected exactly as in
+    # the offline Evaluator V2 report.  Mapping responses are retained only as
+    # a convenient structured API for tests/tools and are already parsed, so
+    # their answer field uses V2's native normalization.
+    answer_protocol = "native" if isinstance(response, Mapping) else "tagged"
+    answer_input = parsed["answer"] if answer_protocol == "native" else response
+    answer_evaluation = evaluate_record(
+        record,
+        answer_input,
+        protocol=answer_protocol,
+    )
+    r_answer = answer_evaluation.score
     r_path = _harmonic_mean([r_valid, r_span, r_summary_task])
     total = r_format * (0.60 * r_answer + 0.40 * r_path)
 
@@ -915,11 +912,12 @@ def compute_programmatic_reward(
             "span_f1": r_span,
             "summary_task_score": r_summary_task,
             "citation_coverage": r_citation_coverage,
-            "subquery_coverage": r_summary_task,
+            "subquery_coverage": float(coverage_details["score"]),
             "answer_score": r_answer,
             "path_score": r_path,
         },
         "component_sources": {
+            "answer_score": f"evaluator_v2_{answer_protocol}",
             "summary_task_score": summary_score_source,
             "span_f1": (
                 "bounded_fragment_reference_match"
@@ -930,6 +928,7 @@ def compute_programmatic_reward(
         "span_details": span_scores,
         "coverage_details": coverage_details,
         "format_errors": format_errors,
+        "answer_evaluation": answer_evaluation.to_dict(),
         "resolved_evidence": resolved,
         "invalid_evidence": invalid_evidence,
         "reference_span_count": len(reference_spans),

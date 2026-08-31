@@ -11,3 +11,7 @@ data/**/*.jsonl
 !data/ood_example.jsonl
 docs/environment_skill.json
 *.log
+*.pid
+*.lock
+*.tfevents.*
+.ipynb_checkpoints/

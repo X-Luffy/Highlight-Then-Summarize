@@ -6,9 +6,28 @@ try:
     from .rewards import compute_programmatic_reward, final_answer_reward, resolve_quote, span_f1
 except ImportError:
     from rewards import compute_programmatic_reward, final_answer_reward, resolve_quote, span_f1
+from block_input import parse_blocks
 
 
 class RewardTest(unittest.TestCase):
+    def test_open_only_prompt_blocks(self) -> None:
+        rendered = (
+            "[BLOCK_ID: ...]\nformat example\n"
+            "[BLOCK_ID: b1]\nalpha line\n"
+            "[BLOCK_ID: b2]\nbeta line\n"
+        )
+        self.assertEqual(
+            parse_blocks(rendered),
+            {"b1": "alpha line", "b2": "beta line"},
+        )
+
+    def test_legacy_closed_prompt_blocks_ignore_trailing_text(self) -> None:
+        rendered = (
+            "[BLOCK_ID: b1]\nalpha line\n[/BLOCK_ID: b1]\n"
+            "Question and instructions"
+        )
+        self.assertEqual(parse_blocks(rendered), {"b1": "alpha line"})
+
     def test_quote_resolution_allows_wrapping_quotes_and_whitespace(self) -> None:
         source = "alpha line one\nalpha line two"
         self.assertEqual(resolve_quote(source, "“alpha line one alpha line two”"), (0, len(source)))
@@ -190,6 +209,35 @@ class RewardTest(unittest.TestCase):
         self.assertEqual(result["components"]["span_f1"], 1.0)
         self.assertEqual(result["components"]["summary_task_score"], 1.0)
         self.assertEqual(result["components"]["answer_score"], 1.0)
+        self.assertEqual(result["reward"], 1.0)
+
+    def test_open_only_prompt_blocks_feed_reward_resolution(self) -> None:
+        record = {
+            "id": "open-only-qa",
+            "benchmark": "Frames",
+            "gt": {"answer": "alpha"},
+            "prompt": [
+                {
+                    "role": "user",
+                    "content": (
+                        "[BLOCK_ID: b1]\nalpha beta gamma\n"
+                        "[BLOCK_ID: b2]\nother text"
+                    ),
+                }
+            ],
+            "reference_spans": [
+                {"block_id": "b1", "start_offset": 0, "end_offset": 5}
+            ],
+            "reference_summary": "alpha",
+        }
+        response = """<evidence>
+[E0001] block_id=b1: alpha
+</evidence>
+<summary>alpha [E0001]</summary>
+<answer>alpha</answer>"""
+        result = compute_programmatic_reward(record, response)
+        self.assertEqual(result["components"]["evidence_validity"], 1.0)
+        self.assertEqual(result["components"]["span_f1"], 1.0)
         self.assertEqual(result["reward"], 1.0)
 
     def test_actual_sft_tag_format_supports_multiple_multiline_quotes(self) -> None:

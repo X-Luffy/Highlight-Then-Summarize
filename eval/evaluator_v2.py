@@ -266,6 +266,24 @@ _FRAMES_ANSWER_RE = re.compile(
     flags=re.IGNORECASE | re.DOTALL,
 )
 
+# These source rows failed the dataset's own answer validation
+# (``gt.judge_result == "NO"``).  They must not enter Frames aggregates.
+_FRAMES_EXCLUDED_CASE_IDS = frozenset(
+    {
+        "v3_frames_0783_1b81c86b51da",
+        "v3_frames_0001_aa5ae5c4e754",
+    }
+)
+
+
+def is_excluded_evaluation_record(record: Mapping[str, Any]) -> bool:
+    """Return whether a record is excluded by a benchmark-native audit rule."""
+    return (
+        str(record.get("benchmark") or "") == "Frames"
+        and str(record.get("id") or record.get("case_id") or "")
+        in _FRAMES_EXCLUDED_CASE_IDS
+    )
+
 
 def _frames_answer_text(value: Any) -> str:
     text = strip_answer_marker(value).strip()
@@ -282,6 +300,12 @@ def evaluate_qa(record: Mapping[str, Any], prediction: str) -> EvaluationResult:
     if str(record.get("benchmark") or "") == "Frames":
         prediction = _frames_answer_text(prediction)
         references = [_frames_answer_text(reference) for reference in references]
+        em = _best_reference_score(prediction, references, exact_match)
+        return EvaluationResult(
+            em,
+            "frames_exact_match",
+            {"exact_match": em, "references": references},
+        )
     em = _best_reference_score(prediction, references, exact_match)
     f1 = _best_reference_score(prediction, references, token_f1)
     return EvaluationResult(
@@ -754,21 +778,47 @@ def evaluate_ranking(
     )
 
 
-def _choice_letters(value: Any) -> List[str]:
+_FINAL_CHOICE_RE = re.compile(
+    r"(?:"
+    r"(?:the\s+)?(?:final\s+)?(?:correct\s+)?(?:answer|option|choice)"
+    r"\s*(?:is|=|:)?"
+    r"|(?:最终|正确)?(?:答案|选项)\s*(?:为|是|=|:)?"
+    r")\s*[\(\[（【]?\s*([A-J])\s*[\)\]）】]?",
+    re.IGNORECASE,
+)
+
+
+def _choice_letters(value: Any, *, final_only: bool = False) -> List[str]:
+    """Extract choice labels without treating reasoning mentions as answers.
+
+    LongBenchV2 is single-choice. Its responses often discuss several options
+    before committing to one, so collecting every label makes a correct final
+    answer a false negative. Other choice benchmarks keep the legacy parser.
+    """
     if isinstance(value, Mapping):
         for key in ("answer", "reference", "choices"):
             if key in value:
-                return _choice_letters(value[key])
+                return _choice_letters(value[key], final_only=final_only)
     if isinstance(value, list):
         return sorted(
             {
                 choice
                 for item in value
-                for choice in _choice_letters(item)
+                for choice in _choice_letters(item, final_only=final_only)
             }
         )
 
     text = strip_answer_marker(value).upper()
+    if final_only:
+        # The last declaration is the response's final commitment.
+        final = _FINAL_CHOICE_RE.findall(text)
+        if final:
+            return [final[-1]]
+        # Bare labels are valid answers; do not scan free-form reasoning.
+        compact = re.sub(r"\s+", "", text)
+        bare = re.fullmatch(r"[\(\[（【]?([A-J])[\)\]）】]?[.。!！]?", compact)
+        return [bare.group(1)] if bare else []
+
     explicit = re.findall(
         r"(?:ANSWER|OPTION|CHOICE|答案|选项)\s*(?:IS|为|是)?\s*[:：]?\s*"
         r"[\(\[（【]?\s*([A-J])\s*[\)\]）】]?",
@@ -795,12 +845,17 @@ def evaluate_choice(
     record: Mapping[str, Any], prediction: str
 ) -> EvaluationResult:
     expected = _choice_letters(_reference_payload(record))
-    predicted = _choice_letters(prediction)
+    final_only = str(record.get("benchmark") or "") == "LongBenchV2"
+    predicted = _choice_letters(prediction, final_only=final_only)
     score = float(bool(expected) and predicted == expected)
     return EvaluationResult(
         score,
         "choice_accuracy",
-        {"predicted_choices": predicted, "reference_choices": expected},
+        {
+            "predicted_choices": predicted,
+            "reference_choices": expected,
+            "choice_parser": "final_declaration" if final_only else "legacy",
+        },
     )
 
 
@@ -1529,6 +1584,15 @@ def evaluate_record(
     prediction: Any,
     protocol: str = "native",
 ) -> EvaluationResult:
+    if is_excluded_evaluation_record(record):
+        return EvaluationResult(
+            0.0,
+            "excluded_case",
+            {
+                "excluded": True,
+                "exclusion_reason": "frames_source_judge_result_no",
+            },
+        )
     normalized = normalize_prediction(prediction, protocol)
     metric_name = _v2_metric_name(record)
     if metric_name == "aa_lcr":

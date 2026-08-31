@@ -8,14 +8,36 @@ from collections.abc import Mapping
 from typing import Any, Dict
 
 
-_BLOCK_RE = re.compile(
-    r"\[BLOCK_ID:\s*([^\]\n]+?)\]\s*(.*?)\s*\[/BLOCK_ID:\s*[^\]\n]+?\]",
-    re.IGNORECASE | re.DOTALL,
+_BLOCK_OPEN_RE = re.compile(
+    r"\[BLOCK_ID:\s*([^\]\n]+?)\]",
+    re.IGNORECASE,
+)
+_BLOCK_CLOSE_RE = re.compile(
+    r"\[/BLOCK_ID:\s*[^\]\n]+?\]",
+    re.IGNORECASE,
 )
 
 
 def _parse_text(text: str) -> Dict[str, str]:
-    return {match.group(1).strip(): match.group(2) for match in _BLOCK_RE.finditer(text)}
+    """Parse legacy closed blocks and the current open-only block format."""
+    matches = list(_BLOCK_OPEN_RE.finditer(text))
+    result: Dict[str, str] = {}
+    for index, match in enumerate(matches):
+        block_id = match.group(1).strip()
+        if block_id in {"...", "…"}:
+            continue
+        content_start = match.end()
+        next_start = (
+            matches[index + 1].start()
+            if index + 1 < len(matches)
+            else len(text)
+        )
+        content_end = next_start
+        close_match = _BLOCK_CLOSE_RE.search(text, content_start, next_start)
+        if close_match is not None:
+            content_end = close_match.start()
+        result[block_id] = text[content_start:content_end].strip()
+    return result
 
 
 def parse_blocks(value: Any) -> Dict[str, str]:

@@ -1,0 +1,79 @@
+{
+  "schema_version": "v3_train_data_manifest_v3",
+  "updated_at": "2026-08-17",
+  "package_status": "READY_FOR_RL",
+  "notes": [
+    "All listed JSONL entry points are real files rather than absolute-path symlinks.",
+    "The active RL pool contains 2,419 records across 21 benchmarks.",
+    "Use rl_swift_train_128k.jsonl for the first 128K ms-swift GRPO phase and rl_swift_train.jsonl for a later long-context phase.",
+    "rl_swift_train.jsonl excludes three empirically confirmed contradictory records; rl.jsonl and rl_swift.jsonl remain intact for auditability.",
+    "MSMARCO-Rerank is not present in the active RL pool.",
+    "Verify this package from the data directory with sha256sum -c CHECKSUMS.sha256."
+  ],
+  "entries": {
+    "sft_paper_messages.jsonl": {
+      "cases": 4228,
+      "format": "messages_with_metadata",
+      "target": "<evidence><summary><answer>",
+      "answer_source": "native_gt"
+    },
+    "sft_paper_messages_swift.jsonl": {
+      "cases": 4228,
+      "format": "messages",
+      "purpose": "Swift-compatible SFT input"
+    },
+    "sft_baseline.jsonl": {
+      "cases": 5260,
+      "format": "baseline_sft"
+    },
+    "rl.jsonl": {
+      "cases": 2419,
+      "benchmarks": 21,
+      "format": "project_native_prompt",
+      "reward": "deterministic_block_aware_programmatic"
+    },
+    "rl_swift.jsonl": {
+      "cases": 2419,
+      "benchmarks": 21,
+      "format": "messages_with_reward_metadata",
+      "source": "rl.jsonl",
+      "sha256": "a4aabde2e6254038eabb485cd1d68fee77e01d4493b7f2b894625adce86e948a"
+    },
+    "rl_swift_train.jsonl": {
+      "cases": 2416,
+      "benchmarks": 21,
+      "format": "messages_with_reward_metadata",
+      "source": "rl.jsonl minus rl_reward_quarantine.json",
+      "purpose": "recommended ms-swift GRPO input",
+      "sha256": "2ad1468d6d77dfa1811a77756abea5d9045ee2724dcac62329d906c0fed3f668"
+    },
+    "rl_swift_train_128k.jsonl": {
+      "cases": 2242,
+      "benchmarks": 21,
+      "format": "messages_with_reward_metadata",
+      "source": "rl_swift_train.jsonl with input_token_num <= 126976",
+      "purpose": "recommended phase-1 GRPO input with room for an 8192-token completion inside the 135168-token SFT budget",
+      "sha256": "ec246defd108d6822eb5f2874b05d3b866efb03e439750f4415a5508401e0353"
+    },
+    "rl_reward_quarantine.json": {
+      "cases": 3,
+      "purpose": "auditable exclusion list for contradictory FinalAnswer and evidence supervision"
+    },
+    "id.jsonl": {
+      "cases": 500,
+      "purpose": "in-distribution evaluation"
+    },
+    "id_with_block_id.jsonl": {
+      "cases": 500,
+      "purpose": "in-distribution evaluation with stable BLOCK_ID sections"
+    },
+    "ood.jsonl": {
+      "cases": 500,
+      "purpose": "out-of-distribution evaluation"
+    },
+    "ood_with_block_id.jsonl": {
+      "cases": 500,
+      "purpose": "out-of-distribution evaluation with stable BLOCK_ID sections"
+    }
+  }
+}

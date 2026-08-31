@@ -1,0 +1,15 @@
+group,model,DocFinQA,Frames,LongCite,MRCR,AA-LCR,LongBenchV2,HELMET-Summ,parse_rate,response_coverage,status,note
+闭源 API,Kimi-K2.5,51.77,37.67,11.05,4.81,43.19,53.89,16.76,94.95%,2575/2575,complete_report,
+闭源 API,GLM-5.2,-,36.18,-,4.80,-,-,-,99.78%,926/2575,partial_live_raw,仍在运行；本快照成功响应 926/2575，原始记录 926，失败/空响应 0。仅 Frames、MRCR 已完整覆盖并显示分数。
+闭源 API,DeepSeek-v4-pro,34.83,37.41,6.89,5.00,48.25,50.37,17.93,93.13%,2575/2575,complete_report,"已完成 2,575/2,575 并上传 AFS；MRCR 已按 fuzzy95 重算。"
+闭源 API,Qwen3.8-Max,-,-,-,5.00,-,-,-,99.49%,781/2575,partial_live_raw,仍在运行；本快照成功响应 781/2575，原始记录 782，失败/空响应 1。当前有 1 条 Frames provider DataInspectionFailed；仅 MRCR 已完整覆盖并显示分数。
+开源,Qwen3-4B-Thinking-2507,39.39,33.87,2.74,0.00,20.99,41.41,13.35,45.55%,2575/2575,complete_report,
+开源,DeepSeek-R1-Distill-Qwen-7B,0.47,9.36,0.94,0.00,0.26,3.94,10.14,62.45%,2575/2575,complete_report,MRCR 按用户要求暂保持旧 strict-exact 结果（0.00），未替换为 fuzzy95。
+开源,DeepSeek-R1-Distill-Qwen-14B,13.18,21.94,4.88,1.01,5.78,25.06,10.98,95.69%,2575/2575,complete_report,
+开源,Qwen3.8-27B,-,-,-,-,-,51.82,-,-,2564/2575,live_log_only_raw_rank_files_not_yet_atomically_published,仍在运行；rank live progress 2564/2575（其中 2544 条日志可单独解析），rank 原子输出尚未全部发布，因此不将日志重建结果作为正式评分。
+我方,Qwen2.5-7B Base,5.14,14.73,5.42,0.40,8.09,27.86,7.26,98.72%,2575/2575,complete_report,
+我方,Qwen2.5-7B SFT,22.37,33.45,14.18,2.97,18.01,35.58,10.20,73.09%,2575/2575,complete_report,
+我方,Qwen2.5-7B RL128 + Process Reward (checkpoint-62),26.33,32.97,15.76,2.75,21.47,32.11,11.58,78.14%,2575/2575,complete_report,"已完成 2,575/2,575 并上传 AFS；MRCR 已按 fuzzy95 重算。"
+我方,Qwen2.5-14B Base,15.99,23.55,8.51,0.80,13.63,29.73,13.60,92.08%,2575/2575,complete_report,AFS extended_20260827；历史报告以 tokenizer >=4000 判 4K 截断。
+我方,Qwen2.5-14B SFT,34.22,38.68,13.77,3.05,24.75,33.24,17.04,81.36%,2575/2575,complete_report,AFS extended_20260827；历史报告以 tokenizer >=4000 判 4K 截断。
+我方,Qwen2.5-14B RL128,30.83,37.72,13.88,3.05,26.86,35.42,17.38,84.35%,2575/2575,complete_report,AFS extended_20260827；历史报告以 tokenizer >=4000 判 4K 截断。

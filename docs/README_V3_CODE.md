@@ -13,12 +13,13 @@
 - `data/`：SFT、RL、ID 和 OOD 的快速 case，以及按 benchmark 精选的完整 case。
 - `configs/`：7B 和 14B 的 SFT/RL YAML 配置示例。
 - `eval/configs/`：历史评估 YAML 模板；路径和集群地址使用公开占位符。
-- `eval/examples/`：七个 benchmark 的 all-model 汇总和少量 per-case 评分。
+- `eval/examples/`：七个 benchmark 的 15-model case-level 样例，包含问题、
+  截断后的输入、完整预测和完整 GT answer，不包含指标表。
 - `docs/`：复现说明、发布清单和凭据文件示例。
 
 仓库**不包含**模型权重、私有凭据，也不包含约 7.6K 条训练和测试 JSONL 全量数据。
 `data/` 下的 case 只用于说明数据格式；`eval/examples/` 下的结果文件是小型快照，
-不包含完整预测目录。完整数据和实验产物请从项目批准的存储位置获取。
+每个 benchmark 只保留三个共享 case，不包含完整预测目录。完整数据和实验产物请从项目批准的存储位置获取。
 
 ## 奖励接口
 

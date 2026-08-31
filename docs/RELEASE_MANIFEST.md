@@ -10,8 +10,10 @@
   and OOD-extended entry point;
 - incremental data-pipeline orchestration and materialization utilities;
 - 7B/14B SFT and RL YAML configurations plus evaluation configurations;
-- a compact seven-task all-model evaluation snapshot and seven per-case score
-  examples;
+- case-level examples for seven benchmarks, covering 15 models and three
+  shared cases per benchmark; each example includes the question, a truncated
+  input preview, the complete prediction, and the complete ground-truth
+  answer;
 - documentation and paper-facing provenance notes.
 
 ## Excluded

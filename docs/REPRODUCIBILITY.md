@@ -23,9 +23,12 @@ Before launching, replace `model`, `dataset`, `external_plugins`, and output pat
 The versioned offline evaluator in `eval/evaluator_v2.py`, driven by `eval/run_eval_v2.py`, is deterministic and benchmark-native. Base/API predictions use the `native` protocol; SFT/RL predictions use the `tagged` protocol, which requires one complete `<answer>...</answer>` pair. ID evaluation excludes `MSMARCO-Rerank`; OOD evaluation excludes `HELMET-Rerank`, leaving 475 valid cases per split. The report's `task_macro_score` is the task-level macro used as Avg in the comparison table. The full prediction files and reports are separate experiment artifacts, not part of this source release.
 
 The quick examples and curated benchmark-diverse cases in `data/` show the SFT,
-RL, ID, and OOD schemas. The seven-task all-model tables and seven compact
-per-case score records in `eval/examples/` are result snapshots only; they must
-not be mistaken for the complete data package or prediction artifacts.
+RL, ID, and OOD schemas. The case-level examples in
+`eval/examples/cases/` contain three shared cases for each of seven benchmarks
+across 15 models. Inputs are capped at 1,000 characters for readability;
+predictions and ground-truth answers are retained in full. These examples are
+result snapshots only and must not be mistaken for the complete data package
+or prediction artifacts.
 
 ## Checks
 

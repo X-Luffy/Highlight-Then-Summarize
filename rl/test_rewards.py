@@ -88,6 +88,7 @@ class RewardTest(unittest.TestCase):
             "reference_spans": [
                 {"block_id": "b1", "start_offset": 0, "end_offset": 5}
             ],
+            "reference_summary": "alpha",
         }
         response = {
             "evidence": [

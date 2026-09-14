@@ -1,6 +1,6 @@
-# V3 数据构造 Pipeline（发布快照）
+# H2S 数据构造 Pipeline（发布快照）
 
-本目录包含增量数据构造的编排脚本、来源整理、物化工具和审计辅助代码。它记录了 V3 的公开研究流程：语义 block 切分、长度窗口约束、BM25 与 embedding 混合召回、RRF 排序、evidence/claim 抽取、summary 构建和最终 QC。
+本目录包含增量数据构造的编排脚本、来源整理、物化工具和审计辅助代码。它记录了 H2S 的公开研究流程：语义 block 切分、长度窗口约束、BM25 与 embedding 混合召回、RRF 排序、evidence/claim 抽取、summary 构建和最终 QC。
 
 ## 重要的发布边界
 
@@ -21,7 +21,7 @@
 先复制 `configs/incremental_train_test.json`，把其中相对路径改成本地数据、外部配置和输出目录。示例配置不含训练数据、模型权重或访问凭据。
 
 ```bash
-cd v3/github
+cd /path/to/Longtext-RL
 MODE=smoke ./data_pipeline/run_all.sh
 ```
 

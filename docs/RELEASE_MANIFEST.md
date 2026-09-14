@@ -1,32 +1,33 @@
-# V3 Release Manifest
+# H2S Release Manifest
 
 ## Included
 
-- deterministic reward and evaluator source;
-- evaluator-V2 runner and benchmark evaluator;
+- block-aware input rendering and token-counting utilities;
+- canonical SFT prompts and data validation helpers;
+- deterministic process rewards and the Swift/GRPO adapter;
+- Evaluator V2 and its command-line runner;
 - unit tests;
-- one quick schema example for each SFT, RL, ID, and OOD entry point;
-- three complete, benchmark-diverse examples for each SFT, RL, ID-extended,
-  and OOD-extended entry point;
-- incremental data-pipeline orchestration and materialization utilities;
-- 7B/14B SFT and RL YAML configurations plus evaluation configurations;
-- case-level examples for seven benchmarks, covering 15 models and three
-  shared cases per benchmark; each example includes the question, a truncated
-  input preview, the complete prediction, and the complete ground-truth
-  answer;
-- documentation and paper-facing provenance notes.
+- small SFT, RL, ID, and OOD schema examples;
+- curated case-level evaluation examples for seven benchmarks;
+- data-construction orchestration and materialization utilities;
+- 7B/14B SFT and RL configuration templates;
+- reproducibility and paper-facing implementation notes.
 
 ## Excluded
 
 - model weights and checkpoints;
-- optimizer states;
-- training/evaluation JSONL data;
-- full evaluator prediction directories and raw API responses;
-- TensorBoard event files, runtime logs, locks, and process IDs;
-- API credentials or private environment files;
-- private Stage-2/4/5/6 API executors;
-- machine-specific absolute paths.
+- optimizer states and training caches;
+- complete training/evaluation JSONL data;
+- full prediction directories and raw API responses;
+- TensorBoard files, runtime logs, locks, and process IDs;
+- API credentials and private environment files;
+- private Stage-2/4/5/6 executors;
+- machine-specific absolute paths;
+- internal knowledge-base exports and unrelated figures.
 
-## Provenance
+## Paper result provenance
 
-This release was assembled from the V3 AFS pipeline snapshot and the final local reward/evaluator implementation. The paper reports the measured audit and evaluator-V2 results from the corresponding experiment artifacts. Hashes and storage paths for those artifacts should be recorded in the project's private experiment registry rather than embedded in a public repository.
+The paper result tables are backed by separate experiment artifacts. The
+public repository provides the evaluator and schemas needed to inspect or
+recompute results when those artifacts are available, but it does not embed
+the private artifact-store paths.

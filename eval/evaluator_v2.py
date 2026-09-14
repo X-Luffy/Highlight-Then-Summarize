@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic benchmark evaluators for V3.
+"""Deterministic benchmark evaluators for H2S.
 
 The module intentionally has no LLM dependency.  Every evaluator returns a
 score in [0, 1] and an auditable metric breakdown.
@@ -12,6 +12,7 @@ import math
 import re
 import string
 import unicodedata
+from difflib import SequenceMatcher
 from collections import Counter
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
@@ -327,15 +328,79 @@ def evaluate_strict_exact(
     )
 
 
+_MRCR_FUZZY95_THRESHOLD = 0.95
+
+
+def normalize_fuzzy95_characters(value: Any) -> str:
+    """Keep Unicode letters/digits only for MRCR's character-fuzzy metric.
+
+    This intentionally removes whitespace, punctuation, markup, and other
+    special characters after NFKC/casefold.  ``str.isalnum`` retains CJK
+    characters, so Chinese and other non-Latin answers are not discarded.
+    """
+    return "".join(
+        character
+        for character in _nfkc(value).casefold()
+        if character.isalnum()
+    )
+
+
+def fuzzy95_character_similarity(prediction: Any, reference: Any) -> float:
+    """Return normalized character similarity used by MRCR fuzzy95.
+
+    A 0.95 SequenceMatcher ratio cannot be reached when the two normalized
+    strings differ too much in length.  The inexpensive bound avoids a costly
+    quadratic comparison for clearly ineligible long-context answers.
+    """
+    left = normalize_fuzzy95_characters(prediction)
+    right = normalize_fuzzy95_characters(reference)
+    if not left or not right:
+        return float(left == right)
+    shorter, longer = sorted((len(left), len(right)))
+    if 2.0 * shorter / (shorter + longer) < _MRCR_FUZZY95_THRESHOLD:
+        return 0.0
+    return SequenceMatcher(None, left, right, autojunk=False).ratio()
+
+
+def evaluate_mrcr_fuzzy95(
+    record: Mapping[str, Any], prediction: str
+) -> EvaluationResult:
+    """MRCR correctness: normalized character similarity at least 95%."""
+    references = reference_answers(record)
+    similarities = [
+        fuzzy95_character_similarity(prediction, reference)
+        for reference in references
+    ]
+    best_similarity = max(similarities, default=0.0)
+    return EvaluationResult(
+        float(best_similarity >= _MRCR_FUZZY95_THRESHOLD),
+        "mrcr_fuzzy95",
+        {
+            "character_similarity": best_similarity,
+            "threshold": _MRCR_FUZZY95_THRESHOLD,
+            "references": references,
+        },
+    )
+
+
 _NUMBER_RE = re.compile(
     r"(?<![A-Za-z0-9])[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)"
     r"(?:\.\d+)?(?:[eE][-+]?\d+)?%?(?![A-Za-z0-9])"
 )
 
 
+def _normalize_numeric_signs(value: Any) -> str:
+    """Normalize numeric signs that NFKC intentionally leaves untouched."""
+    return _nfkc(value).replace("\u2212", "-")
+
+
 def _numbers(value: Any) -> List[Decimal]:
     result: List[Decimal] = []
-    for match in _NUMBER_RE.findall(_nfkc(value)):
+    # NFKC does not normalize U+2212 MINUS SIGN.  Financial answers often
+    # contain it after copy/paste from tables, and Decimal only accepts the
+    # ASCII hyphen-minus sign.
+    text = _normalize_numeric_signs(value)
+    for match in _NUMBER_RE.findall(text):
         cleaned = match.replace(",", "")
         is_percent = cleaned.endswith("%")
         if is_percent:
@@ -406,7 +471,7 @@ def evaluate_numeric(
     ]
     predicted_numbers = _numbers(
         _numeric_answer_region(
-            extract_prediction(prediction), expected_count=len(reference_numbers)
+            prediction, expected_count=len(reference_numbers)
         )
     )
     if not predicted_numbers or not reference_numbers:
@@ -787,6 +852,50 @@ _FINAL_CHOICE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Native API models often preserve the requested XML-like response envelope.
+# For LongBenchV2, the final answer may consequently be written as
+# ``<answer>(C) short explanation</answer>`` rather than "the answer is C".
+# Only inspect this explicit final-answer field; never scan the free-form
+# evidence/reasoning for a bare option label.
+_FINAL_ANSWER_TAG_RE = re.compile(
+    r"<answer\b[^>]*>\s*(.*?)\s*</answer\s*>", re.IGNORECASE | re.DOTALL
+)
+_TAGGED_LEADING_CHOICE_RE = re.compile(
+    r"^\s*[\(\[（【]?\s*([A-J])\s*[\)\]）】]?"
+    r"(?=$|\s|[.。,:：;；!！])",
+    re.IGNORECASE,
+)
+
+
+def _longbenchv2_answer_body_choice(
+    payload: Any, *, parser_prefix: str
+) -> tuple[List[str], str | None]:
+    """Parse a trusted final-answer body without scanning free-form reasoning."""
+    declared = _choice_letters(payload, final_only=True)
+    if declared:
+        return declared, f"{parser_prefix}_final_declaration"
+    leading = _TAGGED_LEADING_CHOICE_RE.match(_nfkc(payload))
+    if leading:
+        return [leading.group(1).upper()], f"{parser_prefix}_leading_label"
+    return [], None
+
+
+def _longbenchv2_answer_tag_choice(value: Any) -> tuple[List[str], str | None]:
+    """Return a committed LongBenchV2 option from a well-formed answer tag.
+
+    The last well-formed tag is treated as the final commitment.  The tag is
+    only trusted for native responses; tagged responses have their own exact
+    one-tag contract enforced by ``normalize_prediction``.
+    """
+    if not isinstance(value, str):
+        return [], None
+    matches = list(_FINAL_ANSWER_TAG_RE.finditer(_nfkc(value)))
+    if not matches:
+        return [], None
+    return _longbenchv2_answer_body_choice(
+        matches[-1].group(1).strip(), parser_prefix="answer_tag"
+    )
+
 
 def _choice_letters(value: Any, *, final_only: bool = False) -> List[str]:
     """Extract choice labels without treating reasoning mentions as answers.
@@ -842,11 +951,24 @@ def _choice_letters(value: Any, *, final_only: bool = False) -> List[str]:
 
 
 def evaluate_choice(
-    record: Mapping[str, Any], prediction: str
+    record: Mapping[str, Any],
+    prediction: str,
+    *,
+    explicit_final_choice: Optional[List[str]] = None,
+    explicit_choice_parser: Optional[str] = None,
 ) -> EvaluationResult:
     expected = _choice_letters(_reference_payload(record))
     final_only = str(record.get("benchmark") or "") == "LongBenchV2"
-    predicted = _choice_letters(prediction, final_only=final_only)
+    parser = "legacy"
+    if final_only:
+        if explicit_final_choice:
+            predicted = explicit_final_choice
+            parser = explicit_choice_parser or "answer_tag"
+        else:
+            predicted = _choice_letters(prediction, final_only=True)
+            parser = "final_declaration"
+    else:
+        predicted = _choice_letters(prediction, final_only=False)
     score = float(bool(expected) and predicted == expected)
     return EvaluationResult(
         score,
@@ -854,7 +976,7 @@ def evaluate_choice(
         {
             "predicted_choices": predicted,
             "reference_choices": expected,
-            "choice_parser": "final_declaration" if final_only else "legacy",
+            "choice_parser": parser,
         },
     )
 
@@ -1005,7 +1127,8 @@ _RANKING_BENCHMARKS = {"MSMARCO-Rerank", "HELMET-Rerank"}
 _NUMERIC_BENCHMARKS = {"DocFinQA", "QwenLong-Test-DocMath"}
 _CHOICE_BENCHMARKS = {"QwenLong-DocMC", "LongBenchV2"}
 _CITED_ANSWER_BENCHMARKS = {"LongCite"}
-_STRICT_EXACT_BENCHMARKS = {"MRCR"}
+_MRCR_BENCHMARKS = {"MRCR"}
+_STRICT_EXACT_BENCHMARKS: set[str] = set()
 _SET_BENCHMARKS = {"AA-LCR"}
 _QA_BENCHMARKS = {"HELMET-LongQA"}
 
@@ -1067,7 +1190,7 @@ _T10_ORDER_MARKERS = (
 
 
 def _is_numeric_reference(value: Any) -> bool:
-    text = re.sub(r"\s+", "", strip_answer_marker(value)).replace(",", "")
+    text = re.sub(r"\s+", "", _normalize_numeric_signs(strip_answer_marker(value))).replace(",", "")
     return bool(
         re.fullmatch(
             r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)%?",
@@ -1157,6 +1280,8 @@ def metric_name_for_record(record: Mapping[str, Any]) -> str:
         return "choice"
     if benchmark in _CITED_ANSWER_BENCHMARKS:
         return "cited_answer"
+    if benchmark in _MRCR_BENCHMARKS:
+        return "mrcr_fuzzy95"
     if benchmark in _STRICT_EXACT_BENCHMARKS:
         return "exact"
     if benchmark in _SET_BENCHMARKS:
@@ -1174,6 +1299,7 @@ def metric_name_for_record(record: Mapping[str, Any]) -> str:
 _EVALUATORS: Dict[str, Callable[[Mapping[str, Any], str], EvaluationResult]] = {
     "qa": evaluate_qa,
     "exact": evaluate_strict_exact,
+    "mrcr_fuzzy95": evaluate_mrcr_fuzzy95,
     "numeric": evaluate_numeric,
     "set": evaluate_set,
     "ranking": evaluate_ranking,
@@ -1211,10 +1337,35 @@ def evaluate_record_v1(
 # ---------------------------------------------------------------------------
 
 _V2_TAGGED_ANSWER_RE = re.compile(
-    r"<answer>\s*(.*?)\s*</answer>", re.IGNORECASE | re.DOTALL
+    r"<answer\b[^>]*>\s*(.*?)\s*</answer\s*>", re.IGNORECASE | re.DOTALL
 )
-_V2_OPEN_ANSWER_RE = re.compile(r"<answer>\s*", re.IGNORECASE)
-_V2_CLOSE_ANSWER_RE = re.compile(r"</answer>", re.IGNORECASE)
+_V2_OPEN_ANSWER_RE = re.compile(r"<answer\b[^>]*>", re.IGNORECASE)
+_V2_CLOSE_ANSWER_RE = re.compile(r"</answer\s*>", re.IGNORECASE)
+_V2_THINK_OPEN_RE = re.compile(r"<think\b[^>]*>", re.IGNORECASE)
+_V2_THINK_CLOSE_RE = re.compile(r"</think\s*>", re.IGNORECASE)
+_V2_ANSWER_TOKEN_RE = re.compile(
+    r"<answer\b[^>]*>|</answer\s*>", re.IGNORECASE
+)
+_V2_THINK_TOKEN_RE = re.compile(
+    r"<think\b[^>]*>|</think\s*>", re.IGNORECASE
+)
+# Complete native response-envelope tags used while choosing an authoritative
+# ``<answer>``.  Semantic answer tags such as LongCite's ``<statement>`` and
+# ``<cite>`` deliberately do not appear here.
+_V2_NATIVE_ENVELOPE_TOKEN_RE = re.compile(
+    r"<(?P<closing>/)?\s*(?P<name>answer|evidence|summary|analysis|reasoning|scratchpad|tool(?:_call)?|function|observation)\b[^>]*>",
+    re.IGNORECASE,
+)
+# These are response-envelope sections rather than answer content.  The
+# native fallback below intentionally permits semantic answer markup such as
+# LongCite's ``<statement>`` / ``<cite>`` while refusing to reinterpret a
+# response's reasoning, evidence, or tool trace as its answer.  Matching the
+# tag name before its closing ``>`` also catches a truncated wrapper such as
+# ``</think`` safely.
+_V2_NONFINAL_RESPONSE_WRAPPER_RE = re.compile(
+    r"</?\s*(?:answer|think|evidence|summary|analysis|reasoning|scratchpad|tool(?:_call)?|function|observation)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -1258,14 +1409,167 @@ _V2_FINAL_ANSWER_CUE_RE = re.compile(
 )
 
 
-def _v2_finalize_answer_text(value: Any) -> str:
-    """Apply protocol-independent final-answer wrapper normalization."""
-    text = extract_prediction(value).strip()
+def _v2_strip_final_answer_cues(value: Any) -> str:
+    """Remove harmless final-answer wording without re-parsing XML tags."""
+    text = _nfkc(value).strip()
     previous = None
     while text and text != previous:
         previous = text
         text = _V2_FINAL_ANSWER_CUE_RE.sub("", text, count=1).strip()
     return text
+
+
+def _v2_finalize_answer_text(value: Any) -> str:
+    """Apply protocol-independent final-answer wrapper normalization."""
+    return _v2_strip_final_answer_cues(extract_prediction(value))
+
+
+def _v2_last_balanced_think_boundary(raw: str) -> tuple[Optional[int], bool]:
+    """Return the end of the last closed/implicit think block.
+
+    The boolean reports an unclosed ``<think>``.  An unmatched closing tag is
+    still a reasoning boundary: some native completions begin inside a
+    prefilled ``<think>`` and serialize only its trailing ``</think>``.  An
+    opening tag that is never closed is never trusted.
+    """
+    depth = 0
+    last_boundary: Optional[int] = None
+    for match in _V2_THINK_TOKEN_RE.finditer(raw):
+        token = match.group(0)
+        if token.startswith("</"):
+            if depth:
+                depth -= 1
+            if depth == 0:
+                last_boundary = match.end()
+        else:
+            depth += 1
+    return last_boundary, bool(depth)
+
+
+def _v2_last_native_answer_body(region: str) -> Optional[str]:
+    """Return the last well-formed native answer body in ``region``.
+
+    Nested/crossed answer tags are malformed and deliberately rejected rather
+    than allowing a regular expression to silently select a partial wrapper.
+    Tags inside non-final response sections (evidence, summary, analysis,
+    tool traces, and so on) are never eligible.  A final unclosed answer tag
+    remains accepted through end-of-response for the native protocol,
+    provided it is otherwise structurally unambiguous.
+    """
+    body_start: Optional[int] = None
+    candidates: List[str] = []
+    saw_tag = False
+    section_stack: List[str] = []
+    for match in _V2_NATIVE_ENVELOPE_TOKEN_RE.finditer(region):
+        name = match.group("name").casefold()
+        is_closing = bool(match.group("closing"))
+        if name != "answer":
+            if is_closing:
+                if not section_stack or section_stack[-1] != name:
+                    return None
+                section_stack.pop()
+            else:
+                # A response-envelope section inside a final answer is an
+                # ambiguous/crossed structure, not part of answer content.
+                if body_start is not None:
+                    return None
+                section_stack.append(name)
+            continue
+
+        saw_tag = True
+        # An answer-looking string inside evidence/summary/etc. is content of
+        # that non-final section, never a candidate final answer.
+        if section_stack:
+            continue
+        if is_closing:
+            if body_start is None:
+                return None
+            candidates.append(region[body_start : match.start()])
+            body_start = None
+        else:
+            if body_start is not None:
+                return None
+            body_start = match.end()
+    if section_stack:
+        return None
+    if body_start is not None:
+        candidates.append(region[body_start:])
+    if not saw_tag or not candidates:
+        return None
+    return candidates[-1]
+
+
+def _v2_native_answer_tag_body(raw: str) -> Optional[str]:
+    """Return the authoritative native ``<answer>`` body, if present.
+
+    Only tags after the final balanced outer ``</think>`` are eligible.  An
+    unclosed (including nested) think block invalidates the native answer so
+    its reasoning cannot leak into scoring.  Native models occasionally omit
+    only the closing answer tag after otherwise completing their response; an
+    unclosed final answer is therefore accepted through end-of-response.
+    ``None`` means no trusted answer tag; an empty string means an explicitly
+    emitted empty final answer.
+    """
+    think_boundary, has_unclosed_think = _v2_last_balanced_think_boundary(raw)
+    if has_unclosed_think:
+        return None
+    region = raw[think_boundary:] if think_boundary is not None else raw
+    return _v2_last_native_answer_body(region)
+
+
+def _v2_native_plain_final_after_think(raw: str) -> Optional[str]:
+    """Return a safe untagged native final segment, when one is explicit.
+
+    Several native reasoning checkpoints (notably R1-Distill) close their
+    thinking block and then emit the final answer as ordinary text instead of
+    wrapping it in ``<answer>``.  That suffix is an explicit final-response
+    boundary, not a fallback into the chain of thought.  It is accepted only
+    when all thinking is balanced and the suffix contains no response-envelope
+    tags; semantic answer markup (for example LongCite statements/citations)
+    remains valid.
+
+    ``None`` means there is no safe plain-final suffix; an empty string means
+    there was a closed thinking boundary but nothing followed it.
+    """
+    think_boundary, has_unclosed_think = _v2_last_balanced_think_boundary(raw)
+    if has_unclosed_think or think_boundary is None:
+        return None
+    suffix = raw[think_boundary:].strip()
+    if not suffix:
+        return ""
+    if _V2_NONFINAL_RESPONSE_WRAPPER_RE.search(suffix):
+        return None
+    return _v2_finalize_answer_text(suffix)
+
+
+def _v2_native_final_answer_text(raw: str) -> str:
+    """Extract the answer body from a native response without reading CoT.
+
+    Some native reasoning models literally discuss the required XML template
+    inside ``<think>`` before emitting their actual answer.  Selecting the
+    first ``<answer>`` in the full response then scores a template such as
+    ``...`` rather than the answer to the user.  The system contract makes a
+    complete ``<answer>`` after the final closed think block authoritative.
+
+    A closed ``</think>`` followed by untagged text is also a valid native
+    final-answer boundary for checkpoints which do not emit the requested
+    answer wrapper.  The suffix is accepted only if it contains no answer,
+    thinking, evidence, summary, analysis, or tool wrapper.  This preserves
+    the fail-closed rule for structured intermediate sections while avoiding
+    the R1-Distill regression that discarded its real final answers.
+
+    For legacy native rows without response wrappers, retain the direct-text
+    fallback used before V2.
+    """
+    answer_body = _v2_native_answer_tag_body(raw)
+    if answer_body is not None:
+        return _v2_strip_final_answer_cues(answer_body)
+    plain_final = _v2_native_plain_final_after_think(raw)
+    if plain_final is not None:
+        return plain_final
+    if _V2_NONFINAL_RESPONSE_WRAPPER_RE.search(raw):
+        return ""
+    return _v2_finalize_answer_text(raw)
 
 
 def normalize_prediction(value: Any, protocol: str = "native") -> PredictionNormalization:
@@ -1280,14 +1584,14 @@ def normalize_prediction(value: Any, protocol: str = "native") -> PredictionNorm
     raw = _v2_native_text(value)
     if protocol == "native":
         return PredictionNormalization(
-            _v2_finalize_answer_text(raw), protocol, "native", 0
+            _v2_native_final_answer_text(raw), protocol, "native", 0
         )
 
     matches = list(_V2_TAGGED_ANSWER_RE.finditer(raw))
     open_count = len(_V2_OPEN_ANSWER_RE.findall(raw))
     close_count = len(_V2_CLOSE_ANSWER_RE.findall(raw))
     if len(matches) == 1 and open_count == 1 and close_count == 1:
-        content = _v2_finalize_answer_text(matches[0].group(1))
+        content = _v2_strip_final_answer_cues(matches[0].group(1))
         if not content:
             return PredictionNormalization("", protocol, "empty_answer", 1)
         return PredictionNormalization(content, protocol, "complete", 1)
@@ -1368,7 +1672,7 @@ def _v2_soft_set_f1(
 
 
 def _v2_answer_is_numeric(value: Any) -> bool:
-    text = re.sub(r"\s+", "", strip_answer_marker(value)).replace(",", "")
+    text = re.sub(r"\s+", "", _normalize_numeric_signs(strip_answer_marker(value))).replace(",", "")
     return bool(re.fullmatch(r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)%?", text))
 
 
@@ -1601,6 +1905,30 @@ def evaluate_record(
         result = evaluate_helmet_cite_v2(record, normalized.text)
     elif metric_name == "longcite":
         result = evaluate_cited_answer_v2(record, normalized.text)
+    elif metric_name == "choice" and str(record.get("benchmark") or "") == "LongBenchV2":
+        if protocol == "native":
+            native_answer_body = _v2_native_answer_tag_body(
+                _v2_native_text(prediction)
+            )
+            if native_answer_body is not None:
+                explicit_choice, explicit_parser = _longbenchv2_answer_body_choice(
+                    _v2_strip_final_answer_cues(native_answer_body),
+                    parser_prefix="answer_tag",
+                )
+            else:
+                explicit_choice, explicit_parser = [], None
+        elif normalized.status == "complete":
+            explicit_choice, explicit_parser = _longbenchv2_answer_body_choice(
+                normalized.text, parser_prefix="tagged_answer_body"
+            )
+        else:
+            explicit_choice, explicit_parser = [], None
+        result = evaluate_choice(
+            record,
+            normalized.text,
+            explicit_final_choice=explicit_choice or None,
+            explicit_choice_parser=explicit_parser,
+        )
     else:
         result = _EVALUATORS[metric_name](record, normalized.text)
     result.details.update(

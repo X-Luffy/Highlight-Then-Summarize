@@ -11,8 +11,8 @@ from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 try:
-    from .evaluator_v2 import evaluate_record, rouge_l
-    from ..block_input import parse_blocks
+    from eval.evaluator_v2 import evaluate_record, rouge_l
+    from block_input import parse_blocks
 except ImportError:
     import sys
     from pathlib import Path
@@ -20,7 +20,7 @@ except ImportError:
     TRAIN_ROOT = Path(__file__).resolve().parents[1]
     if str(TRAIN_ROOT) not in sys.path:
         sys.path.insert(0, str(TRAIN_ROOT))
-    from rl.evaluator_v2 import evaluate_record, rouge_l
+    from eval.evaluator_v2 import evaluate_record, rouge_l
     from block_input import parse_blocks
 
 

@@ -1,14 +1,14 @@
 cff-version: 1.2.0
-title: "V3 Long-Context Data and Process-Reward Release"
+title: "H2S: Highlight-Then-Summarize"
 message: "Please cite the accompanying paper draft and the software release when using this code."
 type: software
 version: 0.1.0
-date-released: 2026-08-22
+date-released: 2026-09-14
 authors:
-  - family-names: "V3 Authors"
+  - family-names: "H2S Authors"
     given-names: "Project"
     affiliation: "Anonymous research project"
-repository-code: "https://github.com/REPLACE_WITH_PROJECT_OWNER/v3-longcontext-release"
+repository-code: "https://github.com/X-Luffy/Longtext-RL"
 license: MIT
 keywords:
   - long-context learning

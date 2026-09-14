@@ -1,7 +1,7 @@
 {
   "oneapi": {
     "endpoint": "https://REPLACE_WITH_APPROVED_ENDPOINT/v1",
-    "api_key": "REPLACE_WITH_SECRET_FROM_SECRET_MANAGER",
+    "api_key_env": "ONEAPI_API_KEY",
     "embedding_model": "REPLACE_WITH_EMBEDDING_MODEL",
     "chat_model": "REPLACE_WITH_CHAT_MODEL"
   }

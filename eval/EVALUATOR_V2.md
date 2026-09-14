@@ -38,7 +38,8 @@ cues. No model-specific scoring rule is applied after this point.
   `[69][70]` references are normalized to the same citation IDs.
 - `HELMET-Cite`: a singular question over a list of acceptable aliases uses QA
   F1; collection questions use alias-aware soft Set F1.
-- `MRCR`: normalized exact match.
+- `MRCR`: normalized character similarity with the paper's fuzzy-95
+  threshold.
 
 ## Reproducible commands
 

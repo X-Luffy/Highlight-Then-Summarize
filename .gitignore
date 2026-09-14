@@ -1,8 +1,16 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .venv/
 outputs/
+checkpoints/
+models/
+run/
+runs/
+tensorboard/
+wandb/
 data/*.jsonl
 data/**/*.jsonl
 !data/sft_example.jsonl
@@ -15,3 +23,21 @@ docs/environment_skill.json
 *.lock
 *.tfevents.*
 .ipynb_checkpoints/
+
+# Model weights and archives are kept in the artifact store, never in Git.
+*.bin
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.tar
+*.tar.gz
+*.tar.zst
+*.zst
+
+# Local credentials and machine-specific configuration.
+.env
+.env.*
+*.secret
+*.credentials
+credentials*.json

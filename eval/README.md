@@ -1,6 +1,9 @@
-# Evaluator
+# Evaluator V2
 
-`evaluator_v2.py` implements the versioned deterministic benchmark evaluator used for the final comparison tables. `run_eval_v2.py` joins records and predictions by `id`, applies split-specific exclusions, extracts the requested output protocol, and writes per-case, per-benchmark, and task-level reports.
+`evaluator_v2.py` implements the versioned deterministic benchmark evaluator
+used for the final H2S comparison tables. `run_eval_v2.py` joins records and
+predictions by `id`, applies split-specific rules, extracts the requested
+output protocol, and writes per-case, per-benchmark, and task-level reports.
 
 ```bash
 python3 eval/run_eval_v2.py \
@@ -24,5 +27,7 @@ Use `--protocol native` for base/API responses and `--protocol tagged` for SFT/R
   preview, the complete prediction, and the complete ground-truth answer.
 
 The seven tasks in the snapshot are DocFinQA, Frames, LongCite, MRCR, AA-LCR,
-LongBenchV2, and HELMET-Summ. The examples are a qualitative result snapshot,
-not a replacement for the full evaluator outputs or prediction files.
+LongBenchV2, and HELMET-Summ. The current evaluator includes MRCR fuzzy-95
+matching and robust final-answer parsing for LongBenchV2. The examples are a
+qualitative result snapshot, not a replacement for the full evaluator outputs
+or prediction files.

@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "H2S: Highlight-Then-Summarize"
+title: "Highlight-Then-Summarize (H2S)"
 message: "Please cite the accompanying paper draft and the software release when using this code."
 type: software
 version: 0.1.0
@@ -8,10 +8,10 @@ authors:
   - family-names: "H2S Authors"
     given-names: "Project"
     affiliation: "Anonymous research project"
-repository-code: "https://github.com/X-Luffy/Longtext-RL"
+repository-code: "https://github.com/X-Luffy/Highlight-Then-Summarize"
 license: MIT
 keywords:
-  - long-context learning
-  - evidence grounding
-  - process reward
+  - long-context understanding
+  - question-conditioned summarization
+  - evidence selection
   - reinforcement learning

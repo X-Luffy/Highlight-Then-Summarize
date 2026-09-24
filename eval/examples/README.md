@@ -58,7 +58,7 @@ answers retain their original JSON type.
 ## Selection Scope
 
 The examples were selected on 2026-08-31 from the 500-case ID/OOD comparison
-sample used by `evaluator_v2_all_models_20260825`. For each benchmark, the
+sample used for the paper comparison. For each benchmark, the
 first three cases in source order were retained only when all 15 models had a
 non-empty prediction for that case. The source comparison sample is a curated
 500-case view and is not the complete extended benchmark pool.

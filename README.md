@@ -1,118 +1,92 @@
-# H2S: Highlight-Then-Summarize
+# Highlight-Then-Summarize (H2S)
 
-This repository contains the public code release for
-**Highlight-Then-Summarize (H2S)**, an evidence-grounded long-context
-reading procedure. H2S extracts source-grounded evidence, organizes it into a
-question-aware summary, and then generates the final answer from that
-intermediate representation.
-
-The paper trains H2S with supervised fine-tuning followed by full-parameter
-GRPO using deterministic process rewards for evidence validity, span
-alignment, summary quality, and final-answer quality.
-
-## Repository scope
-
-This is a code and schema release. It does not contain model checkpoints,
-optimizer states, private API clients, credentials, cluster launch scripts,
-or the complete training/evaluation corpora. The `data/` and
-`eval/examples/` directories contain small, curated examples for schema and
-qualitative inspection only.
-
-The full paper artifacts are maintained separately and should be obtained
-from the project-approved artifact store. Do not commit large JSONL files,
-model weights, runtime logs, or credentials to this repository.
-
-## Layout
+Official implementation and data schemas for **Highlight-Then-Summarize: Learning to Compress Evidence for Long-Context Understanding**. H2S turns long-context answering into one source-traceable trajectory:
 
 ```text
-block_input.py       Block-aware rendering, parsing, and token counting
-configs/             Public SFT, RL, and evaluation configuration templates
-data/                Small schema examples and release manifests
-data_pipeline/       Data-construction orchestration and materialization code
-docs/                Release, reproducibility, and implementation notes
-eval/                Deterministic Evaluator V2 and evaluation CLI
-rl/                  Programmatic process rewards and Swift/GRPO adapter
-sft/                 SFT prompts, data preparation, and validation helpers
+long document + question -> evidence -> question-conditioned summary -> answer
 ```
 
-## Output protocol
+![H2S framework](assets/h2s-framework.png)
 
-H2S uses the following structured response:
+H2S first localizes source-grounded evidence, then integrates scattered evidence into a compact question-conditioned summary, and finally generates the task answer. Models are initialized from `Qwen/Qwen2.5-7B-Instruct-1M` or `Qwen/Qwen2.5-14B-Instruct-1M` and trained with full-parameter SFT followed by GRPO.
+
+## Repository layout
 
 ```text
-<evidence>
-[{"id":"E0001","block_id":"...","quote":"verbatim source span"}]
-</evidence>
-<summary>
-Question-aware summary with evidence references such as [E0001].
-</summary>
-<answer>
-The final answer in the benchmark-native format.
-</answer>
+assets/          Paper framework and analysis figures
+configs/         SFT and three-stage RL configuration templates
+data/            H2S-SFT, H2S-RL, and H2S-Bench examples
+data_pipeline/   Data-construction and materialization utilities
+docs/            Code map, release manifest, and reproducibility notes
+eval/            H2S evaluator and command-line runner
+rl/              H2S process reward and ms-swift adapter
+sft/             Prompt, preparation, and validation helpers
 ```
 
-The implementation in `rl/rewards.py` computes the auditable reward:
+## Data
+
+The local research artifacts corresponding to this release are:
+
+| Public artifact | Local source artifact | Cases |
+|---|---|---:|
+| `H2S-SFT.jsonl` | `sft_v1.jsonl` | 4,228 |
+| `H2S-RL.jsonl` | `rl_v1.jsonl` | 2,419 |
+| `H2S-Bench.jsonl` | `test_v2.jsonl` | 2,575 |
+
+The repository contains representative records rather than the full corpora:
+
+- `data/H2S-SFT-example.jsonl`
+- `data/H2S-RL-example.jsonl`
+- `data/H2S-Bench-ID-example.jsonl`
+- `data/H2S-Bench-OOD-example.jsonl`
+- `data/examples/` for multi-case samples
+
+Every H2S target follows:
 
 ```text
-R_path   = H(R_valid, R_span, R_summary)
-R_total  = R_format * (0.60 * R_answer + 0.40 * R_path)
+<evidence>source-addressable evidence</evidence>
+<summary>question-conditioned summary</summary>
+<answer>task answer</answer>
 ```
 
-Here `H` is the harmonic mean. The final-answer component uses the benchmark
-registry in `eval/evaluator_v2.py`.
+![H2S data construction](assets/h2s-data-pipeline.png)
 
-## Quick checks
+## Training
 
-The unit tests do not require model weights or an online service:
+The configurations in `configs/sft/` initialize from the Qwen2.5 Instruct-1M checkpoints. The RL configurations implement the 32K -> 64K -> 128K context curriculum with eight GRPO generations per prompt and a 2,048-token completion budget. Replace checkpoint, dataset, output, and distributed-runtime paths before use.
+
+The public reward implementation is `rl/h2s_rewards.py`; `rl/h2s_reward_swift.py` registers the `h2s_reward` plugin for ms-swift.
+
+## Evaluation
+
+Evaluate predictions with the task-specific H2S evaluator:
 
 ```bash
-python3 -m unittest \
-  rl.test_rewards \
-  eval.test_evaluator_v2
+python3 eval/run_h2s_eval.py \
+  --data /path/to/H2S-Bench.jsonl \
+  --predictions /path/to/predictions.jsonl \
+  --output outputs/report.json \
+  --protocol tagged
+```
+
+Use `--protocol native` for unstructured base/API responses and `--protocol tagged` for H2S outputs. The evaluator implementation is `eval/h2s_evaluator.py`.
+
+![Evidence--Summary Quality](assets/h2s-esq.png)
+
+## Validation
+
+The core checks require no model weights or online service:
+
+```bash
+python3 -m unittest rl.test_h2s_rewards eval.test_h2s_evaluator
 python3 data_pipeline/test_pipeline_common.py
 python3 -m py_compile $(find . -name '*.py' -not -path './.git/*')
 ```
 
-Run the deterministic evaluator on a local prediction file with:
+## Release scope
 
-```bash
-python3 eval/run_eval_v2.py \
-  --data /path/to/id_v1_extended.jsonl \
-  --predictions /path/to/predictions_id.jsonl \
-  --output outputs/id_report.json \
-  --split id \
-  --protocol tagged
-```
+This public tree excludes model checkpoints, optimizer states, full datasets and predictions, private API clients, cluster launchers, credentials, and runtime logs. Verify the licenses of all upstream benchmarks before redistributing full documents or derived records. Code is released under the MIT License.
 
-Use `--protocol native` for base/API predictions. Use `--protocol tagged` for
-H2S SFT/RL responses.
+## Citation
 
-## Training templates
-
-The YAML files under `configs/` preserve the paper's important settings:
-
-- Qwen2.5-7B/14B-Instruct-1M initialization;
-- 128K input budget and 4K SFT output budget;
-- 32K -> 64K -> 128K RL context curriculum;
-- eight GRPO generations per prompt;
-- 2,048-token RL completion budget;
-- bf16, gradient checkpointing, cosine scheduling, and ZeRO-3.
-
-Before launching, replace model, data, output, and distributed-runtime paths
-with values valid on the target machine. The external training framework and
-private data-construction executors are intentionally outside this release.
-
-## Data and licensing
-
-The release samples are included only to document schemas and code paths.
-Check the licenses of all upstream benchmark sources before redistributing
-full documents or derived datasets. The code is released under the MIT
-License; see `LICENSE`.
-
-## Paper and citation
-
-The accompanying paper is titled
-**Highlight-Then-Summarize: Evidence-Grounded Long-Context Understanding**.
-Citation metadata is provided in `CITATION.cff`. The paper's anonymous source
-keeps its repository URL as a placeholder during review; replace that
-placeholder only when the submission is ready for a non-anonymous release.
+Citation metadata is available in `CITATION.cff`.

@@ -5,7 +5,7 @@
 - block-aware input rendering and token-counting utilities;
 - canonical SFT prompts and data validation helpers;
 - deterministic process rewards and the Swift/GRPO adapter;
-- Evaluator V2 and its command-line runner;
+- the task-specific H2S evaluator and its command-line runner;
 - unit tests;
 - small SFT, RL, ID, and OOD schema examples;
 - curated case-level evaluation examples for seven benchmarks;

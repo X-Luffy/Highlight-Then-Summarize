@@ -1,12 +1,12 @@
 import unittest
 
 try:
-    from .evaluator_v2 import evaluate_record
+    from .h2s_evaluator import evaluate_record
 except ImportError:
-    from evaluator_v2 import evaluate_record
+    from h2s_evaluator import evaluate_record
 
 
-class EvaluatorV2Tests(unittest.TestCase):
+class H2SEvaluatorTests(unittest.TestCase):
     def test_mrcr_uses_fuzzy95_metric(self) -> None:
         record = {
             "id": "mrcr-fuzzy",

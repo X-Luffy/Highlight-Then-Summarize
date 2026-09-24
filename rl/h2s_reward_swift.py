@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ms-swift ORM adapter for the V3 deterministic programmatic reward."""
+"""ms-swift ORM adapter for the H2S deterministic programmatic reward."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ TRAIN_ROOT = SCRIPT_DIR.parent
 if str(TRAIN_ROOT) not in sys.path:
     sys.path.insert(0, str(TRAIN_ROOT))
 
-from rl.rewards import compute_programmatic_reward  # noqa: E402
+from rl.h2s_rewards import compute_programmatic_reward  # noqa: E402
 
 
 RECORD_KEYS = (
@@ -66,12 +66,12 @@ def _bool_env(name: str, default: bool) -> bool:
     return value.strip().casefold() in {"1", "true", "yes", "on"}
 
 
-class LongTextRewardV3(ORM):
-    """Thin batch wrapper; all metric behavior lives in ``rl/rewards.py``."""
+class H2SReward(ORM):
+    """Thin batch wrapper; metric behavior lives in ``rl/h2s_rewards.py``."""
 
     def __init__(self) -> None:
-        self.fail_fast = _bool_env("RL_V3_REWARD_FAIL_FAST", True)
-        raw_log_path = os.environ.get("RL_V3_REWARD_COMPONENT_LOG_PATH", "")
+        self.fail_fast = _bool_env("H2S_REWARD_FAIL_FAST", True)
+        raw_log_path = os.environ.get("H2S_REWARD_COMPONENT_LOG_PATH", "")
         try:
             self.component_log_path = raw_log_path.format(
                 rank=os.environ.get("RANK", "0"),
@@ -82,7 +82,7 @@ class LongTextRewardV3(ORM):
             self.component_log_path = raw_log_path
         self._write_lock = threading.Lock()
         print(
-            "[longtext-reward-v3] deterministic=true "
+            "[h2s-reward] deterministic=true "
             f"fail_fast={str(self.fail_fast).lower()}",
             flush=True,
         )
@@ -108,7 +108,7 @@ class LongTextRewardV3(ORM):
         if not self.component_log_path or not results:
             return
         row = {
-            "kind": "v3_programmatic_reward_components",
+            "kind": "h2s_programmatic_reward_components",
             "count": len(results),
             "reward_mean": sum(float(item.get("reward") or 0.0) for item in results)
             / len(results),
@@ -144,7 +144,7 @@ class LongTextRewardV3(ORM):
             except Exception as exc:  # Make failures explicit in training.
                 if self.fail_fast:
                     raise RuntimeError(
-                        f"V3 reward failed for index={index} id={record.get('id')!r}"
+                        f"H2S reward failed for index={index} id={record.get('id')!r}"
                     ) from exc
                 score = 0.0
                 result = {
@@ -161,4 +161,4 @@ class LongTextRewardV3(ORM):
         return scores
 
 
-orms["longtext_reward_v3"] = LongTextRewardV3
+orms["h2s_reward"] = H2SReward

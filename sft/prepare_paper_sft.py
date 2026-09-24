@@ -956,7 +956,7 @@ def parse_args() -> argparse.Namespace:
         "--tokenizer",
         type=Path,
         default=CODE_V3_ROOT
-        / "data_struction/model/tokenizer/Qwen2.5-7B-Instruct",
+        / "data_struction/model/tokenizer/Qwen2.5-7B-Instruct-1M",
     )
     parser.add_argument(
         "--stage2-root",

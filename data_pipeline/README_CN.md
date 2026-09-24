@@ -21,7 +21,7 @@
 先复制 `configs/incremental_train_test.json`，把其中相对路径改成本地数据、外部配置和输出目录。示例配置不含训练数据、模型权重或访问凭据。
 
 ```bash
-cd /path/to/Longtext-RL
+cd /path/to/Highlight-Then-Summarize
 MODE=smoke ./data_pipeline/run_all.sh
 ```
 

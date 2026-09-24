@@ -10,11 +10,11 @@ paper. It is intentionally separate from the private training workspace.
 2. `sft/system_prompt.py` defines the canonical H2S output prompts.
 3. `sft/prepare_paper_sft.py` materializes structured SFT messages from
    Stage-6 records.
-4. `rl/rewards.py` implements deterministic evidence, span, summary, and
+4. `rl/h2s_rewards.py` implements deterministic evidence, span, summary, and
    answer rewards.
-5. `rl/longtext_reward_v3_swift.py` adapts the reward to Swift/GRPO.
-6. `eval/evaluator_v2.py` and `eval/run_eval_v2.py` implement the offline
-   Evaluator V2 used for the comparison tables.
+5. `rl/h2s_reward_swift.py` adapts the reward to Swift/GRPO.
+6. `eval/h2s_evaluator.py` and `eval/run_h2s_eval.py` implement the offline
+   task-specific evaluation used for the comparison tables.
 
 ## Structured interface
 
@@ -26,7 +26,7 @@ The assistant target is:
 <answer>...</answer>
 ```
 
-Evidence entries identify a source block and a verbatim quote. Summary claims
+Evidence entries identify a source block and a supporting span. Summary claims
 refer back to evidence IDs. The answer section follows the native format of
 the benchmark.
 
@@ -47,6 +47,6 @@ complete data artifacts.
 
 ## Evaluation boundary
 
-Use `id_v1_extended.jsonl` and `ood_v1_extended.jsonl` for the current
-extended evaluation release. The repository includes only small examples;
-full predictions and reports remain experiment artifacts.
+Use the 2,575-case `test_v2.jsonl` artifact for the paper evaluation. The
+repository includes only small H2S-Bench examples; full predictions and
+reports remain experiment artifacts.

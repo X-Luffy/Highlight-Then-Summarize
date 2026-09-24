@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate prediction JSONL with the versioned V2 benchmark registry."""
+"""Evaluate H2S prediction JSONL with the task-specific benchmark registry."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 
 try:
-    from .evaluator_v2 import evaluate_record
+    from .h2s_evaluator import evaluate_record
 except ImportError:
-    from evaluator_v2 import evaluate_record
+    from h2s_evaluator import evaluate_record
 
 SPLIT_EXCLUDED_BENCHMARKS = {
     "id": {"MSMARCO-Rerank"},

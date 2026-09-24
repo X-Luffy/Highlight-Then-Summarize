@@ -1,6 +1,6 @@
-# Evaluator V2
+# H2S evaluator
 
-`evaluator_v2.py` and `run_eval_v2.py` are the versioned FinalAnswer evaluator.
+`h2s_evaluator.py` and `run_h2s_eval.py` implement the task-specific final-answer evaluator.
 The original `evaluators.py` and `run_eval.py` remain unchanged for historical
 reports and the existing RL reward implementation.
 
@@ -44,17 +44,17 @@ cues. No model-specific scoring rule is applied after this point.
 ## Reproducible commands
 
 ```bash
-python train/eval/run_eval_v2.py \
-  --data train/data/id.jsonl \
+python eval/run_h2s_eval.py \
+  --data data/H2S-Bench.jsonl \
   --predictions path/to/predictions_id.jsonl \
-  --output path/to/evaluator_v2_id.json \
+  --output path/to/h2s_id_report.json \
   --split id \
   --protocol native
 
-python train/eval/run_eval_v2.py \
-  --data train/data/ood.jsonl \
+python eval/run_h2s_eval.py \
+  --data data/H2S-Bench.jsonl \
   --predictions path/to/predictions_ood.jsonl \
-  --output path/to/evaluator_v2_ood.json \
+  --output path/to/h2s_ood_report.json \
   --split ood \
   --protocol tagged
 ```

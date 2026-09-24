@@ -2,10 +2,10 @@ model: Qwen/Qwen2.5-7B-Instruct-1M
 train_type: full
 template: qwen
 
-# v3_sft_v1 contains the system prompt, native user input with BLOCK_ID, and
+# H2S-SFT contains the system prompt, native user input with BLOCK_ID, and
 # the assistant target. The source file is retained unchanged in train/data.
 dataset:
-  - data/sft_v1.jsonl
+  - data/H2S-SFT.jsonl
 
 # 128k input budget plus a 4k target budget.
 max_length: 135168

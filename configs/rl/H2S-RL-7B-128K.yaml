@@ -3,19 +3,19 @@ model: __SET_FROM_SFT_CHECKPOINT_BY_LAUNCHER__
 train_type: full
 template: qwen
 dataset:
-  - data/rl_v1_bucket_64k.jsonl
+  - data/H2S-RL-128K.jsonl
 external_plugins:
-  - rl/longtext_reward_v3_swift.py
-reward_funcs: [longtext_reward_v3]
-max_length: 67584
+  - rl/h2s_reward_swift.py
+reward_funcs: [h2s_reward]
+max_length: 133120
 max_completion_length: 2048
 truncation_strategy: delete
 attn_impl: flash_attn
 padding_free: true
 enable_thinking: false
 per_device_train_batch_size: 1
-gradient_accumulation_steps: 4
-generation_batch_size: 128
+gradient_accumulation_steps: 2
+generation_batch_size: 64
 num_generations: 8
 num_train_epochs: 1
 learning_rate: 1.0e-6

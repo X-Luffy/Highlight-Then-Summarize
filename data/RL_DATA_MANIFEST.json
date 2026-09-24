@@ -1,5 +1,5 @@
 {
-  "schema_version": "v3_rl_training_manifest_v1",
+  "schema_version": "h2s_rl_manifest_v1",
   "updated_at": "2026-08-17",
   "recommended_phase1": {
     "file": "rl_swift_train_128k.jsonl",

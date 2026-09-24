@@ -1,14 +1,14 @@
 rlhf_type: grpo
-model: __SET_FROM_PREVIOUS_RL_CHECKPOINT_BY_LAUNCHER__
+model: __SET_FROM_SFT_CHECKPOINT_BY_LAUNCHER__
 train_type: full
 template: qwen
 dataset:
-  - data/rl_length_buckets/rl_v1_128k.jsonl
+  - data/H2S-RL-32K.jsonl
 external_plugins:
-  - rl/longtext_reward_v3_swift.py
+  - rl/h2s_reward_swift.py
 reward_funcs:
-  - longtext_reward_v3
-max_length: 131072
+  - h2s_reward
+max_length: 34816
 max_completion_length: 2048
 truncation_strategy: delete
 attn_impl: flash_attn
@@ -17,8 +17,8 @@ sequence_parallel_size: 8
 enable_thinking: false
 per_device_train_batch_size: 1
 gradient_accumulation_steps: 8
-generation_batch_size: 32
-local_rollout_forward_batch_size: 1
+generation_batch_size: 64
+local_rollout_forward_batch_size: 4
 num_generations: 8
 num_train_epochs: 1
 learning_rate: 1.0e-6

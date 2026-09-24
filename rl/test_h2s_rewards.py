@@ -3,9 +3,9 @@
 import unittest
 
 try:
-    from .rewards import compute_programmatic_reward, final_answer_reward, resolve_quote, span_f1
+    from .h2s_rewards import compute_programmatic_reward, final_answer_reward, resolve_quote, span_f1
 except ImportError:
-    from rewards import compute_programmatic_reward, final_answer_reward, resolve_quote, span_f1
+    from h2s_rewards import compute_programmatic_reward, final_answer_reward, resolve_quote, span_f1
 from block_input import parse_blocks
 
 

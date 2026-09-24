@@ -5,22 +5,33 @@ from __future__ import annotations
 
 import difflib
 import json
+import math
+import os
 import re
+import sys
 import unicodedata
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-try:
-    from eval.evaluator_v2 import evaluate_record, rouge_l
-    from block_input import parse_blocks
-except ImportError:
-    import sys
-    from pathlib import Path
+_CANONICAL_EVALUATOR_ROOT = (
+    Path(__file__).resolve().parents[2] / "paper_number" / "mainresult" / "evaluator"
+)
+if _CANONICAL_EVALUATOR_ROOT.is_dir():
+    sys.path.insert(0, str(_CANONICAL_EVALUATOR_ROOT))
 
+try:
+    # The paper's mainresult evaluator is the canonical FinalAnswer route.
+    from eval.h2s_evaluator import evaluate_record, rouge_l
+except ImportError:
+    from eval.h2s_evaluator import evaluate_record, rouge_l
+
+try:
+    from ..block_input import parse_blocks
+except ImportError:
     TRAIN_ROOT = Path(__file__).resolve().parents[1]
     if str(TRAIN_ROOT) not in sys.path:
         sys.path.insert(0, str(TRAIN_ROOT))
-    from eval.evaluator_v2 import evaluate_record, rouge_l
     from block_input import parse_blocks
 
 
@@ -33,7 +44,7 @@ def final_answer_reward(
     response: Any,
     protocol: str = "native",
 ) -> float:
-    """FinalAnswer score shared with Evaluator V2."""
+    """Final-answer score shared with the H2S evaluator."""
     return evaluate_record(record, response, protocol=protocol).score
 
 
@@ -615,7 +626,7 @@ def summary_task_score(
         return score, "reference_summary_rouge_l"
     return (
         evaluate_record(record, summary, protocol="native").score,
-        "evaluator_v2_native_final_answer_metric_fallback",
+        "h2s_evaluator_native_final_answer_metric_fallback",
     )
 
 
@@ -890,7 +901,7 @@ def compute_programmatic_reward(
     )
     # Actual GRPO completions are tagged text.  Score the complete response so
     # missing, unclosed, or duplicate <answer> tags are rejected exactly as in
-    # the offline Evaluator V2 report.  Mapping responses are retained only as
+    # the offline H2S evaluation report. Mapping responses are retained only as
     # a convenient structured API for tests/tools and are already parsed, so
     # their answer field uses V2's native normalization.
     answer_protocol = "native" if isinstance(response, Mapping) else "tagged"
@@ -917,7 +928,7 @@ def compute_programmatic_reward(
             "path_score": r_path,
         },
         "component_sources": {
-            "answer_score": f"evaluator_v2_{answer_protocol}",
+            "answer_score": f"h2s_evaluator_{answer_protocol}",
             "summary_task_score": summary_score_source,
             "span_f1": (
                 "bounded_fragment_reference_match"
@@ -933,3 +944,187 @@ def compute_programmatic_reward(
         "invalid_evidence": invalid_evidence,
         "reference_span_count": len(reference_spans),
     }
+
+
+# VNext deliberately keeps the V3 parser and evidence resolvers above.  The
+# change is only in aggregation and in response-shape diagnostics, so old
+# reward logs remain directly comparable with new logs.
+def _response_raw_text(response: Any) -> str:
+    if isinstance(response, str):
+        return response
+    if isinstance(response, Mapping):
+        return json.dumps(response, ensure_ascii=False, sort_keys=True)
+    return str(response or "")
+
+
+def _estimate_completion_tokens(text: str) -> int:
+    """Conservative token estimate without loading a tokenizer in every rank."""
+    cjk = len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", text))
+    non_space = len(re.findall(r"\S", text))
+    return max(1, int(round(cjk + max(0, non_space - cjk) / 4.0)))
+
+
+def _repeat_stats(text: str) -> Dict[str, float]:
+    tokens = re.findall(r"[\w]+|[\u3400-\u9fff]", text.casefold())
+    ngram_repeat = 0.0
+    for size in (3, 4):
+        if len(tokens) < size:
+            continue
+        counts: Dict[Tuple[str, ...], int] = defaultdict(int)
+        for index in range(len(tokens) - size + 1):
+            counts[tuple(tokens[index : index + size])] += 1
+        total = sum(counts.values())
+        repeated = sum(max(0, count - 1) for count in counts.values())
+        ngram_repeat = max(ngram_repeat, repeated / max(1, total))
+
+    lines = [
+        " ".join(line.split()).casefold()
+        for line in text.splitlines()
+        if len(line.strip()) >= 16
+    ]
+    line_counts: Dict[str, int] = defaultdict(int)
+    for line in lines:
+        line_counts[line] += 1
+    duplicate_lines = sum(max(0, count - 1) for count in line_counts.values())
+    line_repeat = duplicate_lines / max(1, len(lines))
+    return {
+        "ngram_repeat_ratio": ngram_repeat,
+        "line_repeat_ratio": line_repeat,
+    }
+
+
+def _enumeration_excess(text: str) -> float:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) < 6:
+        return 0.0
+    bullet = [
+        line
+        for line in lines
+        if re.match(r"^(?:[-*+•]|\d+[.)]|[A-Z][.)])\s+", line)
+    ]
+    if len(bullet) < 6:
+        return 0.0
+    density = len(bullet) / len(lines)
+    # A real answer may be a list.  Penalize only dense, long lists in the
+    # narrative portion, where mechanical enumeration is usually a failure.
+    return min(1.0, max(0.0, (density - 0.65) / 0.35) * min(1.0, len(lines) / 12.0))
+
+
+def _response_shape_stats(response: Any, parsed: Mapping[str, Any]) -> Dict[str, float]:
+    raw = _response_raw_text(response)
+    if not isinstance(response, str):
+        return {
+            "trailing_after_answer_chars": 0.0,
+            "duplicate_section_count": 0.0,
+            "stop_score": 1.0,
+        }
+    answer_close = list(re.finditer(r"</answer>\s*", raw, flags=re.IGNORECASE))
+    trailing = len(raw[answer_close[-1].end() :].strip()) if answer_close else 0
+    section_counts = [
+        len(re.findall(rf"<{tag}>", raw, flags=re.IGNORECASE))
+        for tag in ("evidence", "summary", "answer")
+    ]
+    duplicate_sections = sum(max(0, count - 1) for count in section_counts)
+    stop_score = math.exp(-min(6.0, trailing / 128.0 + duplicate_sections * 0.75))
+    return {
+        "trailing_after_answer_chars": float(trailing),
+        "duplicate_section_count": float(duplicate_sections),
+        "stop_score": stop_score,
+    }
+
+
+def compute_programmatic_reward_vnext(
+    record: Mapping[str, Any],
+    response: Any,
+    fuzzy_threshold: float = 0.95,
+    target_completion_tokens: Optional[int] = None,
+) -> Dict[str, Any]:
+    """VNext reward with explicit anti-length and anti-repetition costs.
+
+    ``target_completion_tokens`` is normally supplied by the phase launcher via
+    ``RL_VNEXT_TARGET_TOKENS``.  It is a soft target, not a hard truncation
+    rule; phase 1/2/3 can therefore use 2K/4K/8K without changing the data
+    contract.
+    """
+    base = compute_programmatic_reward(record, response, fuzzy_threshold)
+    parsed = parse_response(response)
+    raw = _response_raw_text(response)
+    metadata = record.get("reward_metadata")
+    metadata = metadata if isinstance(metadata, Mapping) else {}
+    target_value = (
+        target_completion_tokens
+        or metadata.get("reward_target_completion_tokens")
+        or record.get("reward_target_completion_tokens")
+        or os.environ.get("RL_VNEXT_TARGET_TOKENS", "2048")
+    )
+    try:
+        target = max(256, int(target_value))
+    except (TypeError, ValueError):
+        target = 2048
+
+    completion_tokens = _estimate_completion_tokens(raw)
+    excess = max(0.0, (completion_tokens - target) / target)
+    # One smooth budget cost is enough.  It is deliberately mild: the model
+    # can spend extra tokens when they improve answer/evidence quality, but
+    # unbounded generation no longer has a neutral cost.
+    length_score = math.exp(-0.35 * excess)
+
+    # Style checks focus on the model-authored narrative.  Evidence quotes are
+    # still covered by the length budget, but repeated source text alone is not
+    # treated as a hallucination.
+    narrative = f"{parsed.get('summary', '')}\n{parsed.get('answer', '')}"
+    repeat = _repeat_stats(narrative)
+    repeat_excess = min(
+        1.0,
+        max(0.0, (repeat["ngram_repeat_ratio"] - 0.08) / 0.32)
+        + max(0.0, (repeat["line_repeat_ratio"] - 0.05) / 0.30),
+    )
+    list_excess = _enumeration_excess(str(parsed.get("summary") or ""))
+    shape = _response_shape_stats(response, parsed)
+
+    r_answer = float(base["components"]["answer_score"])
+    r_valid = float(base["components"]["evidence_validity"])
+    r_span = float(base["components"]["span_f1"])
+    r_summary = float(base["components"]["summary_task_score"])
+    grounding = 0.60 * r_valid + 0.40 * r_span
+    core = 0.65 * r_answer + 0.25 * grounding + 0.10 * r_summary
+
+    # Missing core sections remain a hard failure.  A citation-link mistake is
+    # a light gate, preserving ranking information inside a GRPO group.
+    format_score_value = float(base["components"]["format"])
+    format_gate = 0.0 if format_score_value <= 0 else 0.75 + 0.25 * format_score_value
+    # Repetition, list density, and trailing text are logged for diagnosis but
+    # intentionally do not create separate targeted penalties.  The only new
+    # behavioral cost in VNext is the smooth completion-length factor.
+    style_factor = length_score
+    total = format_gate * core * length_score
+
+    components = dict(base["components"])
+    components.update(
+        {
+            "grounding_score": grounding,
+            "length_score": length_score,
+            "length_penalty": 1.0 - length_score,
+            "style_factor": style_factor,
+            "completion_tokens_est": float(completion_tokens),
+            "target_completion_tokens": float(target),
+        }
+    )
+    result = dict(base)
+    result["reward"] = total
+    result["schema_version"] = "vnext_anti_length_repeat_v1"
+    result["components"] = components
+    result["component_sources"] = {
+        **base.get("component_sources", {}),
+        "grounding_score": "weighted_evidence_validity_span_f1",
+        "length_score": "soft_target_completion_budget",
+        "length_penalty": "smooth_soft_target_completion_budget",
+    }
+    result["style_details"] = {
+        **repeat,
+        **shape,
+        "enumeration_excess": list_excess,
+        "completion_tokens_est": completion_tokens,
+        "target_completion_tokens": target,
+    }
+    return result

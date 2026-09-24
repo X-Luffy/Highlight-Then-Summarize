@@ -1,18 +1,8 @@
-# Curated Data Cases
+# Curated H2S examples
 
-These files contain three complete records selected from each major public
-entry point:
+- `H2S-SFT-sample.jsonl`: three complete cases from H2S-SFT.
+- `H2S-RL-sample.jsonl`: three complete cases from H2S-RL.
+- `H2S-Bench-ID-sample.jsonl`: three ID cases selected from H2S-Bench.
+- `H2S-Bench-OOD-sample.jsonl`: three OOD cases selected from H2S-Bench.
 
-- `sft_v1_sample.jsonl`: LongBench-Pro-T1, MRCR, and QwenLong-MultiHopRAG
-- `rl_v1_sample.jsonl`: LongBench-Pro-T1, LongCite, and QwenLong-MultiHopRAG
-- `id_v1_extended_sample.jsonl`: CNNSum, DocFinQA, and LongCite
-- `ood_v1_extended_sample.jsonl`: AA-LCR, LongBenchV2, and HELMET-Summ
-
-Selection is deterministic: the first record for each listed benchmark is
-kept in the listed order. The records are complete JSON objects on one line;
-long document fields are intentionally retained so readers can inspect the
-actual input shape.
-
-These are examples only. They are not a substitute for the full training or
-evaluation data, and redistribution must be checked against every upstream
-dataset license.
+These examples preserve the full JSON objects and are intended for schema inspection and local tests, not as substitutes for the complete datasets.

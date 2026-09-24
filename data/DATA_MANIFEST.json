@@ -1,10 +1,10 @@
 {
-  "schema_version": "v3_train_data_manifest_v3",
+  "schema_version": "h2s_data_manifest_v1",
   "updated_at": "2026-08-17",
   "package_status": "READY_FOR_RL",
   "notes": [
     "All listed JSONL entry points are real files rather than absolute-path symlinks.",
-    "The active RL pool contains 2,419 records across 21 benchmarks.",
+    "H2S-Dataset contains 4,228 SFT records and 2,419 RL records from 11 benchmark families.",
     "Use rl_swift_train_128k.jsonl for the first 128K ms-swift GRPO phase and rl_swift_train.jsonl for a later long-context phase.",
     "rl_swift_train.jsonl excludes three empirically confirmed contradictory records; rl.jsonl and rl_swift.jsonl remain intact for auditability.",
     "MSMARCO-Rerank is not present in the active RL pool.",

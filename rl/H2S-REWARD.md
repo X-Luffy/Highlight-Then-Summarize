@@ -1,4 +1,4 @@
-# Programmatic Reward V0
+# H2S reward
 
 This is the frozen initial RL reward design. It is intentionally simple and
 auditable; later versions can iterate without changing the SFT/RL output

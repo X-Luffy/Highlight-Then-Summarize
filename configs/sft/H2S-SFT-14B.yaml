@@ -2,7 +2,7 @@ model: Qwen/Qwen2.5-14B-Instruct-1M
 train_type: full
 template: qwen
 dataset:
-  - data/sft_v1.jsonl
+  - data/H2S-SFT.jsonl
 
 # 128K input budget plus a 4K target budget.
 max_length: 135168

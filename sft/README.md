@@ -1,4 +1,4 @@
-# SFT Core
+# H2S-SFT
 
 This directory contains the framework-neutral SFT prompt, data preparation,
 and validation helpers used by H2S.
@@ -20,7 +20,7 @@ the native record schema and the message-based paper schema.
 
 ```bash
 python3 -m sft.validate_data \
-  --data /path/to/sft_messages.jsonl \
+  --data /path/to/H2S-SFT.jsonl \
   --format messages
 ```
 

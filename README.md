@@ -11,17 +11,6 @@ long-context understanding. H2S first identifies source-grounded evidence,
 then integrates the selected information into a question-conditioned summary,
 and finally produces the task answer.
 
-## 📅 Project Log
-
-| Date | Milestone |
-|---|---|
-| **Aug 2026** | Constructed H2S-Dataset and completed full-parameter SFT for the 7B and 14B models. |
-| **Aug--Sep 2026** | Completed the 32K → 64K → 128K GRPO curriculum and evaluated H2S on seven long-context tasks. |
-| **Sep 2026** | Added H2S-Bench, process-level ESQ analysis, component ablations, output-budget analysis, and attention case studies. |
-| **Sep 2026** | Prepared the public code, configurations, data schemas, and reproducibility materials. |
-
----
-
 ## 📖 Abstract
 
 Long-context understanding requires models to reason over lengthy documents,
@@ -35,8 +24,9 @@ question-conditioned summary. To train this behavior, we construct
 **H2S-Dataset**, comprising 6,647 examples from 11 benchmark families, and
 introduce **H2S-RL**, which provides process-level rewards for evidence and
 summary quality in addition to final-answer correctness. On the seven-task
-**H2S-Bench**, H2S-14B achieves an average score of 32.60 under a shared 128K
-input and 4K output budget, outperforming Qwen3.8-27B by 10.17 points and
+**H2S-Bench**, H2S-14B, trained on H2S-Dataset, achieves an average score of
+32.60 under a shared 128K input and 4K output budget, outperforming
+Qwen3.8-27B by 10.17 points and
 achieving the strongest overall result among the evaluated open-source models.
 
 📄 **Paper:** link will be added after public release.
@@ -90,10 +80,10 @@ tasks.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Qwen2.5-7B-Instruct-1M | 5.00 | 13.95 | 5.37 | 4.01 | 7.31 | 24.04 | 7.16 | 9.55 |
 | H2S-7B-SFT | 20.45 | 31.29 | 8.65 | 58.12 | 13.96 | 27.88 | 5.42 | 23.68 |
-| **H2S-7B** | 26.33 | 32.97 | **15.76** | 59.72 | 21.47 | 32.11 | 11.58 | **28.56** |
+| **H2S-7B** | 26.33 | 32.97 | 15.76 | 59.72 | 21.47 | 32.11 | 11.58 | **28.56** |
 | Qwen2.5-14B-Instruct-1M | 15.70 | 23.47 | 8.32 | 25.05 | 13.56 | 35.82 | 12.03 | 19.14 |
-| H2S-14B-SFT | 31.49 | **37.76** | 10.50 | 65.13 | 22.40 | 28.37 | 8.45 | 29.16 |
-| **H2S-14B** | 30.83 | 37.72 | **13.88** | **66.13** | **26.86** | 35.42 | **17.38** | **32.60** |
+| H2S-14B-SFT | 31.49 | 37.76 | 10.50 | 65.13 | 22.40 | 28.37 | 8.45 | 29.16 |
+| **H2S-14B** | 30.83 | 37.72 | 13.88 | 66.13 | 26.86 | 35.42 | 17.38 | **32.60** |
 
 H2S-RL improves the corresponding SFT checkpoints by **4.88 points** for 7B
 and **3.44 points** for 14B. H2S-14B also exceeds the larger
@@ -179,10 +169,11 @@ prompt and uses a 2,048-token completion budget. Configuration templates are
 provided in [`configs/sft/`](configs/sft/) and [`configs/rl/`](configs/rl/).
 
 The public H2S reward is implemented in
-[`rl/h2s_rewards.py`](rl/h2s_rewards.py). It combines final-answer quality with
-evidence grounding, evidence-span coverage, summary quality, and structured
-output validity. [`rl/h2s_reward_swift.py`](rl/h2s_reward_swift.py) exposes the
-reward to ms-swift as `h2s_reward`.
+[`rl/h2s_rewards.py`](rl/h2s_rewards.py). It combines task-specific final-answer
+quality with a grounded evidence-to-summary path and structured-output validity.
+[`rl/h2s_reward_swift.py`](rl/h2s_reward_swift.py) exposes the reward to
+ms-swift as `h2s_reward`; exact component definitions and aggregation are
+documented in [`rl/H2S-REWARD.md`](rl/H2S-REWARD.md).
 
 ---
 
@@ -211,6 +202,7 @@ with open("data/H2S-RL-example.jsonl", encoding="utf-8") as handle:
 print(example["benchmark"])
 print(example["question"])
 print(example["reference_summary"])
+print(example["reference_spans"])
 ```
 
 ### Evaluate Predictions
@@ -224,7 +216,9 @@ python3 eval/run_h2s_eval.py \
 ```
 
 Use `--protocol native` for unstructured base/API responses and
-`--protocol tagged` for H2S-SFT/H2S outputs.
+`--protocol tagged` for H2S-SFT/H2S outputs. Prediction rows must contain an
+identifier matching the reference data and a generated-output field; accepted
+schemas are documented in [`eval/README.md`](eval/README.md).
 
 ### Run Validation
 
